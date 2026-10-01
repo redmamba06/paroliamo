@@ -384,3 +384,10 @@ h2 { margin: .3em 0 .5em; font-size: 1.3rem; }
 .cah-card.pickable { cursor: pointer; border-color: #555; }
 .cah-card.pickable:hover { border-color: #facc15; }
 .cah-custom { max-width: 520px; margin: 10px auto; }
+
+.spect-view { flex: 1; width: 100%; overflow-y: auto; }
+.spect .mt.typing { background: transparent; border: 2px solid #5a5a62; color: var(--text); }
+.spect .opp { padding: 10px; }
+.spect .mini, .spect .mrow { gap: 3px; }
+#spect-btn { margin-left: 6px; padding: 4px 10px; font-size: .82rem; }
+.spect-view .spect .mt { width: min(34px, 7.4vw); height: min(34px, 7.4vw); font-size: min(1rem, 4vw); }

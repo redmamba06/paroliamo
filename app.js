@@ -220,6 +220,7 @@ class WordleSession {
     this.maxRows = o.maxRows || 6;
     this.onRow = o.onRow || (() => {});
     this.onEnd = o.onEnd || (() => {});
+    this.onType = o.onType || (() => {});
     this.rows = (o.rows || []).slice();
     this.cur = '';
     this.busy = false;
@@ -239,6 +240,7 @@ class WordleSession {
     else if (/^[a-z]$/.test(k) && this.cur.length < this.len) this.cur += k;
     else return;
     this.board.typing(this.rows.length, this.cur);
+    this.onType(this.cur);
   }
   submit() {
     const i = this.rows.length;
@@ -252,6 +254,7 @@ class WordleSession {
     const p = scoreGuess(g, this.secret);
     this.rows.push({ w: g, p });
     this.cur = '';
+    this.onType('');
     this.busy = true;
     this.board.paint(i, g, p, true);
     const won = isWin(p);
@@ -1080,13 +1083,57 @@ async function renderWordle(r) {
       board: R.board, secret, valid: W.set, hard: r.hard,
       rows: arr(mine.rows),
       onRow: (rows, s) => writeMyRows(r, rows, s),
-      onEnd: (won, s) => onMyWordEnd(r, won, s)
+      onEnd: (won, s) => onMyWordEnd(r, won, s),
+      onType: sprint ? null : (cur) => sendTyping(r.id, cur)
     });
+    R.spectating = false;
     R.board.onKey = (k) => R.sess && R.sess.key(k);
     if (timeLeft(r) === 0) R.sess.locked = true;
   }
+  // chi ha finito può guardare gli altri mentre giocano
+  const watch = !!(R.sess && R.sess.over && R.spectating && !sprint);
+  $('#spect-view').classList.toggle('hidden', !watch);
+  R.board.el.classList.toggle('hidden', watch);
+  R.board.kbd.classList.toggle('hidden', watch || !!(R.sess && R.sess.over));
+  if (watch) $('#spect-view').innerHTML = spectHtml(r, Object.keys(r.parts || {}).filter(id => id !== me.id), true);
   activeKey = R.board.onKey;
   renderWStatus(r);
+}
+
+const sendTyping = (() => {
+  let t, last = null;
+  return (rid, cur) => {
+    clearTimeout(t);
+    t = setTimeout(() => {
+      if (cur === last || !R.d.round || R.d.round.id !== rid) return;
+      last = cur;
+      R.room.set(`round/p/${me.id}/t`, cur || null).catch(() => {});
+    }, cur ? 120 : 0);
+  };
+})();
+
+// griglie grandi degli altri giocatori (con lettere se si possono vedere)
+function spectHtml(r, ids, letters) {
+  const p = r.p || {};
+  if (!ids.length) return '<div class="opps-empty">Nessun altro sta giocando.</div>';
+  return `<div class="spect">${ids.map(id => {
+    const x = p[id] || {};
+    const rows = arr(x.rows);
+    const won = isWin(rows.length && rows[rows.length - 1].p);
+    const st = x.done ? (won ? `✅ ${rows.length}/6` : '❌') : rows.length ? `${rows.length}/6 ✍️` : '✍️';
+    let h = '';
+    for (let i = 0; i < 6; i++) {
+      const row = rows[i];
+      const typing = !row && i === rows.length && !x.done ? (x.t || '') : '';
+      h += '<div class="mrow">';
+      for (let j = 0; j < r.len; j++) {
+        if (row) h += `<div class="mt ${row.p[j]}">${letters ? esc(row.w[j]) : ''}</div>`;
+        else h += `<div class="mt ${typing[j] ? 'typing' : ''}">${letters && typing[j] ? esc(typing[j]) : typing[j] ? '•' : ''}</div>`;
+      }
+      h += '</div>';
+    }
+    return `<div class="opp ${x.done ? (won ? 'done-won' : 'done-lost') : ''}"><div class="opp-head"><span>${pemoji(id)}</span><span class="nm">${esc(pname(id))}</span><span class="st">${st}</span></div><div class="mini">${h}</div></div>`;
+  }).join('')}</div>`;
 }
 
 function sprintWord(r, i) {
@@ -1119,6 +1166,13 @@ function onMyWordEnd(r, won, s) {
   if (r.wmode === 'sprint') { if (won) confetti(25); return; }
   if (won) confetti(60);
   renderWStatus(R.d.round || r);
+  // dopo un attimo si passa a guardare chi sta ancora giocando
+  setTimeout(() => {
+    const cur = R.d.round;
+    if (!cur || cur.id !== r.id || cur.status !== 'play' || !R.sess || !R.sess.over) return;
+    const still = Object.keys(cur.parts || {}).some(id => id !== me.id && isPresent(id) && !((cur.p || {})[id] || {}).done);
+    if (still) { R.spectating = true; renderWordle(cur); }
+  }, 2600);
 }
 
 function renderWStatus(r) {
@@ -1132,7 +1186,8 @@ function renderWStatus(r) {
     const mine = p[me.id] || {};
     html = `🔥 Parole indovinate: <b>${mine.sol || 0}</b> · punti <b>${mine.pts || 0}</b>`;
   } else if (R.sess.over) {
-    html = (R.sess.won ? `🎉 <b>Presa in ${R.sess.rows.length}!</b>` : '😵 <b>Niente da fare</b>') + ` · aspettiamo gli altri (${doneN}/${parts.length})`;
+    html = (R.sess.won ? `🎉 <b>Presa in ${R.sess.rows.length}!</b>` : '😵 <b>Niente da fare</b>') + ` · finiti ${doneN}/${parts.length}` +
+      (parts.length > 1 ? ` <button class="btn small" id="spect-btn">${R.spectating ? '↩️ La mia griglia' : '👀 Guarda gli altri'}</button>` : '');
   } else if (R.sess.locked) {
     html = '⏰ <b>Tempo scaduto!</b>';
   } else {
@@ -1172,17 +1227,14 @@ function renderOpps(r) {
 
 function renderSpectator(r) {
   activeKey = null;
-  R.board.el.classList.add('spect');
   R.board.kbd.classList.add('hidden');
-  const p = r.p || {};
   const ids = Object.keys(r.parts || {});
   const isChooser = r.chooser === me.id;
   $('#wstatus').innerHTML = isChooser ? `Hai scelto <b>${esc(dec(r.s, R.code + r.id).toUpperCase())}</b> · guardali soffrire 😈`
     : 'Guardi questo round: giochi dal prossimo 👀';
-  R.board.el.innerHTML = `<div class="spect">${ids.map(id => {
-    const rows = arr((p[id] || {}).rows);
-    return `<div class="opp"><div class="opp-head"><span>${pemoji(id)}</span><span class="nm">${esc(pname(id))}</span></div>${miniGrid(rows, r.len, 6, isChooser)}</div>`;
-  }).join('')}</div>`;
+  R.board.el.classList.add('hidden');
+  $('#spect-view').classList.remove('hidden');
+  $('#spect-view').innerHTML = spectHtml(r, ids, isChooser);
 }
 
 /* ---------- parola dell'amico: scelta ---------- */
@@ -1449,6 +1501,11 @@ function bindRoomUi() {
     setCfg(b.parentElement.dataset.k, b.dataset.v);
   });
   $('#start-btn').onclick = startGame;
+  $('#wstatus').addEventListener('click', (e) => {
+    if (!e.target.closest('#spect-btn')) return;
+    R.spectating = !R.spectating;
+    if (R.d.round) renderWordle(R.d.round);
+  });
   Object.values(GAMES).forEach(G => G.bind && G.bind());
   $('#game-pick').onclick = (e) => { const b = e.target.closest('button'); if (b) setCfg('game', b.dataset.g); };
   $('#ana-letters').onclick = (e) => { const b = e.target.closest('button[data-i]'); if (b) anaPick(+b.dataset.i); };
