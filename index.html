@@ -21,7 +21,7 @@
     <div class="logo" aria-label="Paroliamo">
       <span class="lt g">P</span><span class="lt y">A</span><span class="lt b">R</span><span class="lt g">O</span><span class="lt b">L</span><span class="lt y">I</span><span class="lt g">A</span><span class="lt b">M</span><span class="lt g">O</span>
     </div>
-    <p class="tagline">Wordle in multiplayer per le serate in chiamata</p>
+    <p class="tagline">Wordle e anagrammi per le serate in chiamata</p>
 
     <div class="card">
       <label class="lbl" for="name-input">Come ti chiami?</label>
@@ -50,13 +50,17 @@
       <div class="solo-head">
         <b>🎯 Allenati da solo</b>
       </div>
+      <div class="seg solo-games" id="solo-game">
+        <button data-v="wordle">🟩 Wordle</button><button data-v="sprint">⏱️ Sprint</button><button data-v="anagram">🔀 Anagrammi</button>
+      </div>
+      <div id="solo-best" class="muted small"></div>
       <div class="solo-head">
         <div class="seg small" id="solo-lang"><button data-v="it">🇮🇹</button><button data-v="en">🇬🇧</button></div>
         <div class="seg small" id="solo-len">
           <button data-v="4">4</button><button data-v="5" class="on">5</button><button data-v="6">6</button><button data-v="7">7</button>
         </div>
       </div>
-      <button id="solo-btn" class="btn">Gioca una parola</button>
+      <button id="solo-btn" class="btn">Gioca</button>
     </div>
 
     <details class="card settings-box" id="db-box">
@@ -237,10 +241,12 @@
   <header class="topbar">
     <button id="solo-back" class="icon-btn" title="Indietro">←</button>
     <div class="round-info"><b>Allenamento</b> · <span id="solo-info"></span></div>
-    <button id="solo-new" class="btn small">Nuova parola</button>
+    <div id="solo-timer" class="timer hidden"></div>
+    <button id="solo-new" class="btn small">Ricomincia</button>
   </header>
   <main class="solo-main">
-    <div class="wcenter">
+    <div id="solo-ana" class="solo-ana hidden"></div>
+    <div class="wcenter" id="solo-wordle">
       <div id="solo-status" class="wstatus"></div>
       <div id="solo-board" class="board"></div>
       <div id="solo-kbd" class="kbd"></div>

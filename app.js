@@ -306,6 +306,7 @@ function showScreen(id) {
 }
 
 /* ---------------- HOME ---------------- */
+let refreshSoloBest = () => {};
 function initHome() {
   $('#name-input').value = me.name;
   $('#emoji-btn').textContent = me.emoji;
@@ -333,11 +334,19 @@ function initHome() {
   const paintSoloLen = () => $$('#solo-len button').forEach(b => b.classList.toggle('on', +b.dataset.v === soloLen));
   paintSoloLen();
   $('#solo-len').onclick = (e) => { const b = e.target.closest('button'); if (!b) return; soloLen = +b.dataset.v; localStorage.setItem('pq_solo_len', soloLen); paintSoloLen(); };
-  $('#solo-btn').onclick = () => startSolo(soloLen);
   let soloLang = localStorage.getItem('pq_solo_lang') || 'it';
-  const paintSoloLang = () => $$('#solo-lang button').forEach(b => b.classList.toggle('on', b.dataset.v === soloLang));
-  paintSoloLang();
-  $('#solo-lang').onclick = (e) => { const b = e.target.closest('button'); if (!b) return; soloLang = b.dataset.v; localStorage.setItem('pq_solo_lang', soloLang); paintSoloLang(); };
+  let soloGame = localStorage.getItem('pq_solo_game') || 'wordle';
+  const paintSolo = () => {
+    $$('#solo-lang button').forEach(b => b.classList.toggle('on', b.dataset.v === soloLang));
+    $$('#solo-game button').forEach(b => b.classList.toggle('on', b.dataset.v === soloGame));
+    $('#solo-best').innerHTML = soloBestText(soloGame, soloLang, soloLen);
+  };
+  refreshSoloBest = paintSolo;
+  paintSolo();
+  $('#solo-lang').onclick = (e) => { const b = e.target.closest('button'); if (!b) return; soloLang = b.dataset.v; localStorage.setItem('pq_solo_lang', soloLang); paintSolo(); };
+  $('#solo-game').onclick = (e) => { const b = e.target.closest('button'); if (!b) return; soloGame = b.dataset.v; localStorage.setItem('pq_solo_game', soloGame); paintSolo(); };
+  $('#solo-len').addEventListener('click', paintSolo);
+  $('#solo-btn').onclick = () => startSolo(soloGame, soloLen, soloLang);
 
   // impostazioni
   const cb = localStorage.getItem('pq_cb') === '1';
@@ -365,14 +374,48 @@ function needName() {
 
 /* ---------------- ALLENAMENTO ---------------- */
 let soloBoard;
-async function startSolo(len) {
+const SOLO = { tick: null, timeouts: [] };
+const SOLO_NAMES = { wordle: 'Wordle', sprint: 'Sprint', anagram: 'Anagrammi' };
+const bestKey = (game, lang, len) => `pq_best_${game}_${lang}${len}`;
+function soloBestText(game, lang, len) {
+  if (game === 'wordle') return '';
+  const b = +(localStorage.getItem(bestKey(game, lang, len)) || 0);
+  return b ? `🏆 Il tuo record (${len} lettere ${lang === 'en' ? '🇬🇧' : '🇮🇹'}): <b>${b}</b> ${game === 'sprint' ? 'parole in 3 minuti' : 'anagrammi su 10'}` : '';
+}
+function saveBest(game, lang, len, v) {
+  const k = bestKey(game, lang, len);
+  const old = +(localStorage.getItem(k) || 0);
+  if (v > old) { localStorage.setItem(k, v); return true; }
+  return false;
+}
+function soloCleanup() {
+  clearInterval(SOLO.tick); SOLO.tick = null;
+  SOLO.timeouts.forEach(clearTimeout); SOLO.timeouts = [];
+  A.solo = false;
+  activeKey = null;
+}
+const soloLater = (fn, ms) => SOLO.timeouts.push(setTimeout(fn, ms));
+const fmtTime = (ms) => { const s = Math.ceil(ms / 1000); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
+
+async function startSolo(game, len, lang) {
+  soloCleanup();
   showScreen('s-solo');
   soloBoard = soloBoard || new Board($('#solo-board'), $('#solo-kbd'));
-  const lang = localStorage.getItem('pq_solo_lang') || 'it';
+  $('#solo-info').textContent = `${SOLO_NAMES[game]} · ${len} lettere · ${lang === 'en' ? '🇬🇧' : '🇮🇹'}`;
+  $('#solo-wordle').classList.toggle('hidden', game === 'anagram');
+  $('#solo-ana').classList.toggle('hidden', game !== 'anagram');
+  $('#solo-timer').classList.toggle('hidden', game === 'wordle');
+  $('#solo-new').onclick = () => startSolo(game, len, lang);
+  $('#solo-back').onclick = () => { soloCleanup(); showScreen('s-home'); refreshSoloBest(); };
   const W = await loadWords(len, lang);
+  if (game === 'wordle') soloWordle(W, len, lang);
+  else if (game === 'sprint') soloSprint(W, len, lang);
+  else soloAnagram(W, len, lang);
+}
+
+function soloWordle(W, len, lang) {
   const list = pool(len, 'normale', lang);
   const secret = list[rand(list.length)];
-  $('#solo-info').textContent = `${len} lettere · ${lang === 'en' ? '🇬🇧' : '🇮🇹'}`;
   $('#solo-status').innerHTML = 'Indovina la parola in 6 tentativi';
   const s = new WordleSession({
     board: soloBoard, secret, valid: W.set,
@@ -386,8 +429,118 @@ async function startSolo(len) {
   });
   soloBoard.onKey = (k) => s.key(k);
   activeKey = soloBoard.onKey;
-  $('#solo-new').onclick = () => startSolo(len);
-  $('#solo-back').onclick = () => showScreen('s-home');
+}
+
+function soloSprint(W, len, lang) {
+  const DUR = 180000;
+  const end = Date.now() + DUR;
+  const words = seededShuffle(pool(len, 'normale', lang), rand(1e9));
+  let n = 0, solved = 0, pts = 0, sess = null, over = false;
+  const status = () => { $('#solo-status').innerHTML = `🔥 Parole: <b>${solved}</b> · punti <b>${pts}</b>`; };
+  const next = () => {
+    if (over) return;
+    const secret = words[n++ % words.length];
+    sess = new WordleSession({
+      board: soloBoard, secret, valid: W.set,
+      onEnd: (won, s) => {
+        if (over) return;
+        if (won) { solved++; pts += 100 + (6 - s.rows.length) * 20; confetti(20); }
+        else toast(`Era ${secret.toUpperCase()} — avanti!`, 1600);
+        status();
+        soloLater(next, won ? 900 : 1600);
+      }
+    });
+    soloBoard.onKey = (k) => sess && sess.key(k);
+    activeKey = soloBoard.onKey;
+  };
+  status();
+  next();
+  SOLO.tick = setInterval(() => {
+    const left = Math.max(0, end - Date.now());
+    const el = $('#solo-timer');
+    el.textContent = fmtTime(left);
+    el.classList.toggle('low', left <= 10000);
+    if (left > 0 || over) return;
+    over = true;
+    if (sess) sess.locked = true;
+    clearInterval(SOLO.tick);
+    const rec = saveBest('sprint', lang, len, solved);
+    Sfx.play('win');
+    if (rec && solved) confetti(100);
+    $('#solo-status').innerHTML = `⏱️ <b>Tempo!</b> ${solved} parole · ${pts} punti${rec && solved ? ' · 🏆 <b>nuovo record!</b>' : ''}`;
+  }, 250);
+}
+
+function soloAnagram(W, len, lang) {
+  const N = 10, QDUR = 30000;
+  const box = $('#solo-ana');
+  const wrap = $('.ana-wrap');
+  box.innerHTML = '';
+  box.appendChild(wrap);
+  wrap.classList.remove('hidden');
+  $('#ana-board').innerHTML = '';
+  const list = pool(len, 'normale', lang).filter(w => new Set(w).size > 2);
+  const words = seededShuffle(list, rand(1e9)).slice(0, N);
+  let idx = -1, solved = 0, qStart = 0;
+  A.solo = true;
+  A.lang = lang;
+  const show = () => {
+    idx++;
+    if (idx >= N) return finish();
+    A.key = 'solo:' + idx;
+    A.word = words[idx];
+    A.letters = [...scramble(A.word, rand(1e9))];
+    A.order = A.letters.map((_, i) => i);
+    A.picks = [];
+    A.locked = false;
+    A.errUntil = 0;
+    $('#ana-slots').classList.remove('ok');
+    $('#ana-msg').innerHTML = '';
+    $('#ana-count').textContent = `Parola ${idx + 1} di ${N} · risolte ${solved}`;
+    paintAna();
+    qStart = Date.now();
+    activeKey = anaKey;
+  };
+  A.onSolved = (guess) => {
+    solved++;
+    $('#ana-msg').innerHTML = `✅ Esatto! <span class="big">${esc(guess)}</span>${guess !== A.word ? `<span class="muted small">valeva anche ${esc(A.word.toUpperCase())}</span>` : ''}`;
+    $('#ana-count').textContent = `Parola ${idx + 1} di ${N} · risolte ${solved}`;
+    Sfx.play('win');
+    soloLater(show, 1200);
+  };
+  const finish = () => {
+    clearInterval(SOLO.tick);
+    activeKey = null;
+    $('#solo-timer').classList.add('hidden');
+    const rec = saveBest('anagram', lang, len, solved);
+    wrap.classList.add('hidden');
+    const end = document.createElement('div');
+    end.className = 'card narrow solo-end';
+    end.innerHTML = `<div class="big-num">${solved}/${N}</div><div>anagrammi risolti</div>
+      ${rec && solved ? '<p>🏆 <b>Nuovo record!</b></p>' : ''}
+      <div class="sprint-list" style="margin-top:12px">${words.map(w => `<span>${esc(w)}</span>`).join('')}</div>
+      <button class="btn primary" id="solo-again">Rigioca</button>`;
+    box.appendChild(end);
+    $('#solo-again').onclick = () => startSolo('anagram', len, lang);
+    if (solved) { confetti(rec ? 100 : 40); Sfx.play('win'); }
+  };
+  show();
+  SOLO.tick = setInterval(() => {
+    if (idx >= N || idx < 0) return;
+    const left = Math.max(0, qStart + QDUR - Date.now());
+    const el = $('#solo-timer');
+    el.textContent = fmtTime(left);
+    el.classList.toggle('low', left <= 5000);
+    if (A.locked) return;
+    if (left === 0) {
+      A.locked = true;
+      $('#ana-msg').innerHTML = `⏰ Era <span class="big">${esc(A.word)}</span>`;
+      Sfx.play('lose');
+      soloLater(show, 2000);
+    } else if (left < QDUR / 2 && Date.now() > (A.errUntil || 0)) {
+      $('#ana-msg').innerHTML = `💡 Inizia con <b>${esc(A.word[0].toUpperCase())}</b>`;
+    }
+  }, 250);
 }
 
 /* ================================================================
@@ -1047,6 +1200,10 @@ function scramble(w, seed) {
 }
 
 async function renderAnagram(r) {
+  const wrap = $('.ana-wrap');
+  if (wrap.parentElement.id !== 'v-anagram') { $('#v-anagram').appendChild(wrap); A.key = null; }
+  wrap.classList.remove('hidden');
+  A.solo = false;
   const key = `${R.code}:${r.id}:${r.idx}`;
   if (A.key !== key) {
     A.key = key;
@@ -1120,12 +1277,13 @@ function anaKey(k) {
 
 async function anaCheck() {
   const r = R.d.round;
-  if (!r || r.game !== 'anagram' || A.locked) return;
+  if (A.locked || (!A.solo && (!r || r.game !== 'anagram'))) return;
   const guess = A.picks.map(i => A.letters[i]).join('');
-  const W = await loadWords(guess.length, r.lang);
+  const W = await loadWords(guess.length, A.solo ? A.lang : r.lang);
   if (guess === A.word || W.set.has(guess)) {
     A.locked = true;
     $('#ana-slots').classList.add('ok');
+    if (A.solo) { A.onSolved(guess); return; }
     R.room.set(`round/ans/i${r.idx}/${me.id}`, { w: guess, at: Net.TS }).catch(() => { A.locked = false; toast('Errore di rete'); });
   } else {
     const sl = $('#ana-slots');
