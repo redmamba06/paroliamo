@@ -1,5 +1,5 @@
 /* ============================================================
-   Paroliamo — Wordle multiplayer + Rarità
+   Paroliamo — Wordle multiplayer
    Modello: l'host fa da regista (avvia i round, chiude i round,
    salva i punteggi nello storico); ogni giocatore scrive solo
    i propri tentativi/risposte. I punti si calcolano in modo
@@ -393,13 +393,13 @@ async function startSolo(len) {
 /* ================================================================
    STANZA ONLINE
    ================================================================ */
-const DEFAULT_CFG = { game: 'wordle', wmode: 'classic', lang: 'it', len: 5, diff: 'normale', timer: 0, hard: 0, rmode: 'rara', rtimer: 45, rnames: 1 };
+const DEFAULT_CFG = { game: 'wordle', wmode: 'classic', lang: 'it', len: 5, diff: 'normale', timer: 0, hard: 0 };
 const STALE_MS = 16000;
 
 const R = {
   room: null, code: null, d: {}, isHost: false, hb: null, tick: null,
   board: null, sess: null, sessKey: null, setupToken: 0,
-  reactSeen: null, viewRoundKey: null, raraRoundId: null,
+  reactSeen: null, viewRoundKey: null,
   mergeSel: null, lastTickSec: null, busy: false
 };
 
@@ -469,7 +469,7 @@ async function leaveRoom() {
   try { await R.room.update('players/' + me.id, { left: true }); } catch {}
   R.room.stop();
   clearInterval(R.hb); clearInterval(R.tick);
-  Object.assign(R, { room: null, code: null, d: {}, sess: null, sessKey: null, reactSeen: null, viewRoundKey: null, raraRoundId: null });
+  Object.assign(R, { room: null, code: null, d: {}, sess: null, sessKey: null, reactSeen: null, viewRoundKey: null });
   sessionStorage.removeItem('pq_in_room');
   history.replaceState(null, '', location.pathname);
   showScreen('s-home');
@@ -532,12 +532,6 @@ function roundResults(r) {
     }
     return { pts, d };
   }
-  if (r.game === 'rara') {
-    const { groups } = raraGroups(r);
-    Object.keys(r.parts || {}).forEach(id => { pts[id] = 0; d[id] = { k: 0 }; });
-    groups.forEach(g => g.ids.forEach(id => { pts[id] = g.pts; d[id] = { k: g.ids.length, v: g.valid ? 1 : 0, top: g.top ? 1 : 0 }; }));
-    return { pts, d };
-  }
   return { pts, d };
 }
 
@@ -566,94 +560,7 @@ function scoreTable(limit) {
   }).join('')}</table>`;
 }
 
-/* ---------- rarità: raggruppa risposte simili ---------- */
-const ARTICLES = new Set(['il', 'lo', 'la', 'i', 'gli', 'le', 'un', 'uno', 'una', 'l', 'del', 'della', 'dei', 'delle']);
-function normAnswer(s) {
-  let t = (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
-  const ws = t.split(' ').filter(Boolean);
-  while (ws.length > 1 && ARTICLES.has(ws[0])) ws.shift();
-  return ws.join(' ');
-}
-function stem(s) { return s.split(' ').map(w => (w.length > 3 ? w.replace(/[aeiou]$/, '') : w)).join(' '); }
-function lev(a, b) {
-  if (Math.abs(a.length - b.length) > 2) return 9;
-  const dp = Array.from({ length: b.length + 1 }, (_, i) => i);
-  for (let i = 1; i <= a.length; i++) {
-    let prev = dp[0]; dp[0] = i;
-    for (let j = 1; j <= b.length; j++) {
-      const tmp = dp[j];
-      dp[j] = Math.min(dp[j] + 1, dp[j - 1] + 1, prev + (a[i - 1] === b[j - 1] ? 0 : 1));
-      prev = tmp;
-    }
-  }
-  return dp[b.length];
-}
-function similar(a, b) {
-  if (!a || !b) return false;
-  if (a === b || stem(a) === stem(b)) return true;
-  const m = Math.min(a.length, b.length);
-  const dist = lev(a, b);
-  return (m >= 5 && dist <= 1) || (m >= 8 && dist <= 2);
-}
-function raraGroups(r) {
-  const ans = r.a || {};
-  const ids = Object.keys(ans).filter(id => normAnswer(ans[id] && ans[id].t));
-  const norm = Object.fromEntries(ids.map(id => [id, normAnswer(ans[id].t)]));
-  const parent = Object.fromEntries(ids.map(id => [id, id]));
-  const find = (x) => (parent[x] === x ? x : (parent[x] = find(parent[x])));
-  const union = (a, b) => { const ra = find(a), rb = find(b); if (ra !== rb) parent[rb] = ra; };
-  const split = r.split || {};
-  for (let i = 0; i < ids.length; i++) for (let j = i + 1; j < ids.length; j++) {
-    if (!split[ids[i]] && !split[ids[j]] && similar(norm[ids[i]], norm[ids[j]])) union(ids[i], ids[j]);
-  }
-  Object.entries(r.merge || {}).forEach(([a, b]) => { if (parent[a] && parent[b]) union(a, b); });
-  const map = {};
-  ids.forEach(id => { (map[find(id)] = map[find(id)] || []).push(id); });
-  const flags = r.flag || {};
-  const thr = Math.floor((ids.length - 1) / 2) + 1;   // maggioranza degli altri
-  const groups = Object.values(map).map(gids => {
-    const voters = new Set();
-    gids.forEach(id => Object.keys(flags[id] || {}).forEach(v => { if (!gids.includes(v)) voters.add(v); }));
-    // testo da mostrare: la versione più frequente
-    const texts = gids.map(id => ans[id].t.trim());
-    const text = texts.sort((a, b) => texts.filter(x => x === b).length - texts.filter(x => x === a).length)[0];
-    return { ids: gids, text, voters: [...voters], valid: voters.size < thr, key: gids.slice().sort()[0] };
-  });
-  const validSizes = groups.filter(g => g.valid).map(g => g.ids.length);
-  const maxK = Math.max(0, ...validSizes);
-  groups.forEach(g => {
-    const k = g.ids.length;
-    if (!g.valid) g.pts = 0;
-    else if (r.mode === 'comune') { g.top = k > 1 && k === maxK; g.pts = 100 * (k - 1) + (g.top ? 50 : 0); }
-    else g.pts = k === 1 ? 300 : Math.round(300 / k / 10) * 10;
-  });
-  groups.sort((a, b) => (r.mode === 'comune' ? b.ids.length - a.ids.length : a.ids.length - b.ids.length) || b.pts - a.pts);
-  return { groups, thr, answered: ids.length };
-}
-
 /* ---------- creazione dei round (solo host) ---------- */
-function pickQuestion() {
-  const d = R.d;
-  // prima le domande proposte dagli amici
-  const queued = Object.entries(d.qq || {}).filter(([, v]) => v && v.t).sort((a, b) => (a[1].at || 0) - (b[1].at || 0));
-  if (queued.length) {
-    const [k, v] = queued[0];
-    return { q: v.t, qi: -1, by: v.by, consume: k };
-  }
-  const used = d.usedQ || {};
-  const cfg = d.cfg || DEFAULT_CFG;
-  let cands = QUESTIONS.map((q, i) => i).filter(i => !used['q' + i] && (cfg.rnames || !QUESTIONS[i].includes('{p}')));
-  if (presentIds().length < 2) cands = cands.filter(i => !QUESTIONS[i].includes('{p}'));
-  if (!cands.length) cands = QUESTIONS.map((q, i) => i).filter(i => !QUESTIONS[i].includes('{p}'));
-  const qi = cands[rand(cands.length)];
-  let q = QUESTIONS[qi];
-  if (q.includes('{p}')) {
-    const pres = presentIds();
-    q = q.replace('{p}', pname(pres[rand(pres.length)]));
-  }
-  return { q, qi };
-}
-
 async function makeRoundPatch() {
   const d = R.d;
   const cfg = Object.assign({}, DEFAULT_CFG, d.cfg || {});
@@ -683,11 +590,6 @@ async function makeRoundPatch() {
       r.s = enc(list[rand(list.length)], R.code + id);
     }
     patch.round = r;
-  } else {
-    const mode = cfg.rmode === 'mix' ? (Math.random() < 0.5 ? 'rara' : 'comune') : cfg.rmode;
-    const q = pickQuestion();
-    patch.round = { id, game: 'rara', mode, q: q.q, qi: q.qi, by: q.by || null, status: 'play', startAt: Net.TS, dur: (+cfg.rtimer || 45) * 1000, parts };
-    if (q.consume) patch['qq/' + q.consume] = null;
   }
   return patch;
 }
@@ -702,9 +604,6 @@ function commitPatch() {
     const w = r.s ? dec(r.s, R.code + r.id) : '';
     title = r.wmode === 'sprint' ? `Sprint ${r.len} lettere` : `Wordle · ${w.toUpperCase()}`;
     if (w) patch['usedW/' + w] = true;
-  } else {
-    title = `Rarità · ${r.q}`;
-    if (r.qi >= 0) patch['usedQ/q' + r.qi] = true;
   }
   patch['hist/r' + r.id] = { n: r.id, g: r.game, m: r.wmode || r.mode, t: title, pts: res.pts, d: res.d, at: Net.TS };
   return patch;
@@ -748,7 +647,6 @@ function hostTick() {
   let allDone = false;
   if (parts.length) {
     if (r.game === 'wordle' && r.wmode !== 'sprint') allDone = parts.every(id => r.p && r.p[id] && r.p[id].done);
-    if (r.game === 'rara') allDone = parts.every(id => r.a && r.a[id] && r.a[id].t);
   }
   // quando tutti hanno finito aspetto un attimo, così l'ultimo vede l'animazione
   if (allDone && !expired) {
@@ -782,7 +680,6 @@ function onTick() {
       R.sess.locked = true;
       $('#wstatus').innerHTML = '⏰ <b>Tempo scaduto!</b>';
     }
-    if (left === 0 && r.game === 'rara') $('#rara-input').disabled = true;
   }
   // ogni secondo circa: regia e presenza
   const sec = Math.floor(Date.now() / 1000);
@@ -829,7 +726,6 @@ function onRoomData() {
   if (r && r.status === 'final') view = 'final';
   else if (r && r.status === 'reveal') view = 'reveal';
   else if (r && r.game === 'wordle') view = r.status === 'choose' ? 'choose' : 'wordle';
-  else if (r && r.game === 'rara') view = 'rara';
   $$('#room-main .view').forEach(v => v.classList.toggle('active', v.id === 'v-' + view));
   $('#s-room').classList.toggle('in-wordle', view === 'wordle');
   if (view !== 'wordle') activeKey = null;
@@ -837,7 +733,6 @@ function onRoomData() {
   if (view === 'lobby') renderLobby();
   if (view === 'wordle') renderWordle(r);
   if (view === 'choose') renderChoose(r);
-  if (view === 'rara') renderRara(r);
   if (view === 'reveal') renderReveal(r);
   if (view === 'final') renderFinal();
   if (!$('#modal').classList.contains('hidden') && R.modalScore) openScores();
@@ -845,7 +740,6 @@ function onRoomData() {
 }
 
 function modeLabel(r) {
-  if (r.game === 'rara') return r.mode === 'comune' ? 'Rarità · gregge 🐑' : 'Rarità 🦄';
   const m = { classic: 'Wordle', friend: 'Parola dell\'amico', sprint: 'Sprint' }[r.wmode] || 'Wordle';
   return `${m} · ${r.lang === 'en' ? '🇬🇧 ' : ''}${r.len} lettere${r.hard ? ' · hard' : ''}`;
 }
@@ -862,11 +756,6 @@ const WMODE_HELP = {
   friend: 'A turno uno di voi sceglie la parola e gli altri la indovinano. Chi sceglie prende punti in base a quanto fa penare gli altri.',
   sprint: 'Contro il tempo: indovina più parole possibile prima che scada il timer. Tutti hanno la stessa sequenza di parole.'
 };
-const RMODE_HELP = {
-  rara: 'Tutti rispondono alla stessa domanda. Risposta che non ha dato nessun altro: 300 punti. Se la date in due 150, in tre 100… Le risposte assurde si possono bocciare a votazione.',
-  comune: 'Al contrario: devi pensare come gli altri! Ogni amico che dà la tua stessa risposta vale 100 punti, +50 per la risposta più popolare.',
-  mix: 'Ogni domanda estrae a sorte se vince la risposta più rara 🦄 o quella più comune 🐑.'
-};
 function renderLobby() {
   const ps = players();
   const ids = Object.keys(ps).filter(id => !ps[id].left).sort((a, b) => (ps[a].joinedAt || 0) - (ps[b].joinedAt || 0));
@@ -878,9 +767,6 @@ function renderLobby() {
       ${isPresent(id) ? '' : '<span class="tag">offline</span>'}</li>`).join('');
 
   const cfg = Object.assign({}, DEFAULT_CFG, R.d.cfg || {});
-  $$('#game-pick button').forEach(b => b.classList.toggle('on', b.dataset.g === cfg.game));
-  $('#cfg-wordle').classList.toggle('on', cfg.game === 'wordle');
-  $('#cfg-rara').classList.toggle('on', cfg.game === 'rara');
   $$('#cfg-card .seg').forEach(seg => {
     const k = seg.dataset.k;
     let v = String(cfg[k]);
@@ -891,14 +777,11 @@ function renderLobby() {
     });
     seg.classList.toggle('locked', !R.isHost);
   });
-  $('#game-pick').classList.toggle('locked', !R.isHost);
-  $('#game-pick').style.pointerEvents = R.isHost ? '' : 'none';
   $('#wmode-help').textContent = WMODE_HELP[cfg.wmode] || '';
-  $('#rmode-help').textContent = RMODE_HELP[cfg.rmode] || '';
   $('#cfg-hostnote').textContent = R.isHost ? '' : `(sceglie ${pname(host)})`;
   $('#start-btn').classList.toggle('hidden', !R.isHost);
   $('#wait-host').classList.toggle('hidden', R.isHost);
-  const needTwo = cfg.game === 'wordle' && cfg.wmode === 'friend' && presentIds().length < 2;
+  const needTwo = cfg.wmode === 'friend' && presentIds().length < 2;
   $('#start-btn').disabled = needTwo;
   $('#start-btn').textContent = needTwo ? 'Servono almeno 2 giocatori' : '▶️ Inizia';
   $('#lobby-score').innerHTML = scoreTable();
@@ -1079,37 +962,6 @@ async function confirmChoice() {
   await R.room.update('round', { s: enc(w, R.code + r.id), status: 'play', startAt: Net.TS });
 }
 
-/* ---------- rarità ---------- */
-function renderRara(r) {
-  maybeJoinLate(r);
-  const inp = $('#rara-input');
-  if (R.raraRoundId !== r.id) {
-    R.raraRoundId = r.id;
-    const a = (r.a || {})[me.id];
-    inp.value = a ? a.t : '';
-    inp.disabled = false;
-    setTimeout(() => inp.focus(), 80);
-  }
-  $('#rara-mode').innerHTML = r.mode === 'comune' ? '🐑 PENSA COME IL GREGGE' : '🦄 VINCE LA RISPOSTA PIÙ RARA';
-  $('#rara-mode').style.color = r.mode === 'comune' ? '#7dd3fc' : '#c4b5fd';
-  $('#rara-q').innerHTML = esc(r.q) + (r.by ? `<div class="muted small">domanda di ${who(r.by)}</div>` : '');
-  const mineA = (r.a || {})[me.id];
-  $('#rara-sent').innerHTML = !myPart(r) ? 'Entri dal prossimo round 👀'
-    : mineA ? `✅ Hai risposto <b>«${esc(mineA.t)}»</b> — puoi cambiarla finché c'è tempo` : '';
-  $('#rara-status').innerHTML = Object.keys(r.parts || {}).filter(isPresent).map(id =>
-    `<li class="${(r.a || {})[id] ? 'ok' : ''}">${(r.a || {})[id] ? '✅' : '⏳'} ${who(id)}</li>`).join('');
-}
-async function sendRara(e) {
-  e.preventDefault();
-  const r = R.d.round;
-  if (!r || r.game !== 'rara' || r.status !== 'play') return;
-  const t = $('#rara-input').value.trim().slice(0, 40);
-  if (!normAnswer(t)) return toast('Scrivi una risposta');
-  if (timeLeft(r) === 0) return toast('Tempo scaduto ⏰');
-  try { await R.room.set(`round/a/${me.id}`, { t }); $('#rara-input').blur(); }
-  catch { toast('Errore di rete'); }
-}
-
 /* ---------- risultati del round ---------- */
 function renderReveal(r) {
   activeKey = null;
@@ -1140,87 +992,20 @@ function renderReveal(r) {
         <div class="muted small">${dd.t ? `in ${dd.t}${dd.first ? ' · ⚡ primo!' : ''}` : '❌'}</div></div>`;
     }).join('')}</div>`;
     if (!R._celebrated || R._celebrated !== r.id) { R._celebrated = r.id; Sfx.play('reveal'); }
-  } else {
-    renderRaraReveal(r, res);
   }
   $('#reveal-score').innerHTML = '<div class="card-title">Classifica</div>' + scoreTable();
   renderHostActions(r);
 }
 
-function renderRaraReveal(r, res) {
-  const { groups, thr } = raraGroups(r);
-  const isComune = r.mode === 'comune';
-  $('#reveal-head').innerHTML = `<div class="rara-mode" style="color:${isComune ? '#7dd3fc' : '#c4b5fd'}">${isComune ? '🐑 PENSA COME IL GREGGE' : '🦄 VINCE LA PIÙ RARA'}</div>
-    <h2>${esc(r.q)}</h2><div class="muted small">Una risposta assurda? Bocciatela con 👎 (servono ${thr} ${thr === 1 ? 'voto' : 'voti'}).${R.isHost ? ' Tu sei l\'host: puoi unire o separare le risposte.' : ''}</div>`;
-  const noAns = Object.keys(r.parts || {}).filter(id => !normAnswer(((r.a || {})[id] || {}).t));
-  $('#reveal-body').innerHTML = `<div class="groups">${groups.map(g => {
-    const mineIn = g.ids.includes(me.id);
-    const iFlag = g.ids.some(id => r.flag && r.flag[id] && r.flag[id][me.id]);
-    const unique = !isComune && g.ids.length === 1 && g.valid;
-    return `<div class="group ${unique ? 'unique' : ''} ${g.valid ? '' : 'invalid'} ${R.mergeSel === g.key ? 'sel' : ''}" data-key="${g.key}">
-      <div class="gbody"><div class="gans">${unique ? '🦄 ' : g.top ? '🐑 ' : ''}${esc(g.text)}</div>
-      <div class="gwho">${g.ids.map(who).join(', ')}</div></div>
-      <div class="gpts pts-badge ${g.pts ? '' : 'zero'}">+${g.pts}</div>
-      <div class="gbtns">
-        ${mineIn ? '' : `<button data-act="flag" class="${iFlag ? 'on' : ''}">👎 ${g.voters.length || ''}</button>`}
-        ${R.isHost ? (R.mergeSel && R.mergeSel !== g.key ? '<button data-act="mergeto">🔗 qui</button>' : `<button data-act="merge">${R.mergeSel === g.key ? '✖︎ annulla' : '🔗 unisci'}</button>`) : ''}
-        ${R.isHost && g.ids.length > 1 ? '<button data-act="split">✂️ separa</button>' : ''}
-      </div></div>`;
-  }).join('')}</div>${noAns.length ? `<div class="muted small center">Senza risposta: ${noAns.map(who).join(', ')}</div>` : ''}`;
-}
-
-function onGroupAction(e) {
-  const b = e.target.closest('button[data-act]');
-  if (!b) return;
-  const r = R.d.round;
-  if (!r || r.game !== 'rara' || r.status !== 'reveal') return;
-  const key = b.closest('.group').dataset.key;
-  const { groups } = raraGroups(r);
-  const g = groups.find(x => x.key === key);
-  if (!g) return;
-  const act = b.dataset.act;
-  if (act === 'flag') {
-    const on = g.ids.some(id => r.flag && r.flag[id] && r.flag[id][me.id]);
-    const patch = {};
-    g.ids.forEach(id => { patch[`flag/${id}/${me.id}`] = on ? null : true; });
-    R.room.update('round', patch).catch(() => toast('Errore di rete'));
-  } else if (act === 'merge') {
-    R.mergeSel = R.mergeSel === key ? null : key;
-    renderReveal(r);
-  } else if (act === 'mergeto') {
-    const from = groups.find(x => x.key === R.mergeSel);
-    R.mergeSel = null;
-    if (!from) return renderReveal(r);
-    const patch = {};
-    from.ids.forEach(id => { patch[`merge/${id}`] = g.ids[0]; patch[`split/${id}`] = null; });
-    R.room.update('round', patch).catch(() => toast('Errore di rete'));
-  } else if (act === 'split') {
-    const patch = {};
-    g.ids.forEach(id => { patch[`split/${id}`] = true; patch[`merge/${id}`] = null; });
-    R.room.update('round', patch).catch(() => toast('Errore di rete'));
-  }
-}
-
 function renderHostActions(r) {
   const el = $('#host-actions');
-  const qn = Object.keys(R.d.qq || {}).length;
-  const propose = r.game === 'rara' || (R.d.cfg || {}).game === 'rara'
-    ? `<button class="btn ghost" data-a="propose">✏️ Proponi una domanda${qn ? ` (${qn} in coda)` : ''}</button>` : '';
   if (!R.isHost) {
-    el.innerHTML = `<div class="muted center" style="width:100%">Aspettiamo che ${who(computeHost())} faccia partire il prossimo round…</div>${propose}`;
+    el.innerHTML = `<div class="muted center" style="width:100%">Aspettiamo che ${who(computeHost())} faccia partire il prossimo round…</div>`;
     return;
   }
   el.innerHTML = `<button class="btn primary" data-a="next">▶️ Prossimo round</button>
-    <button class="btn" data-a="lobby">⚙️ Cambia gioco</button>
-    <button class="btn" data-a="final">🏁 Fine serata</button>${propose}`;
-}
-
-function proposeQuestion() {
-  const t = prompt('Scrivi una domanda per Rarità (es. "Il peggior regalo che ha ricevuto Marco"):');
-  if (!t || !t.trim()) return;
-  R.room.set(`qq/${me.id}${Date.now().toString(36)}`, { t: t.trim().slice(0, 140), by: me.id, at: Net.TS })
-    .then(() => toast('Domanda in coda! Uscirà al prossimo round di Rarità 📝', 2400))
-    .catch(() => toast('Errore di rete'));
+    <button class="btn" data-a="lobby">⚙️ Impostazioni</button>
+    <button class="btn" data-a="final">🏁 Fine serata</button>`;
 }
 
 /* ---------- finale ---------- */
@@ -1238,9 +1023,6 @@ function awards() {
   best(tally((h, d) => h.g === 'wordle' && d.first ? 1 : 0), 'Il più veloce', '⚡', 'volte primo');
   best(tally((h, d) => h.g === 'wordle' && h.m !== 'sprint' && !d.chooser && d.t === 0 ? 1 : 0), 'Sfiga cosmica', '💀', 'parole mancate');
   best(tally((h, d) => h.g === 'wordle' && d.sol ? d.sol : 0), 'Macchina da sprint', '🏎️', 'parole in sprint');
-  best(tally((h, d) => h.g === 'rara' && h.m !== 'comune' && d.k === 1 && d.v ? 1 : 0), 'Unicorno', '🦄', 'risposte uniche');
-  best(tally((h, d) => h.g === 'rara' && h.m === 'comune' && d.top && d.v ? 1 : 0), 'Pecorella del gregge', '🐑', 'risposte popolari');
-  best(tally((h, d) => h.g === 'rara' && d.k && !d.v ? 1 : 0), 'Risposte bocciate', '🤡', 'bocciature');
   return out.join('');
 }
 function renderFinal() {
@@ -1283,7 +1065,6 @@ function bindRoomUi() {
   $('#score-btn').onclick = openScores;
   $('#modal-x').onclick = closeModal;
   $('#modal').onclick = (e) => { if (e.target.id === 'modal') closeModal(); };
-  $('#game-pick').onclick = (e) => { const b = e.target.closest('button'); if (b) setCfg('game', b.dataset.g); };
   $('#cfg-card').addEventListener('click', (e) => {
     const b = e.target.closest('.seg button'); if (!b) return;
     setCfg(b.parentElement.dataset.k, b.dataset.v);
@@ -1297,11 +1078,9 @@ function bindRoomUi() {
     const list = pool(r.len, 'normale', r.lang);
     $('#choose-input').value = list[rand(list.length)];
   };
-  $('#rara-form').onsubmit = sendRara;
-  $('#reveal-body').addEventListener('click', onGroupAction);
   const actions = (e) => {
     const b = e.target.closest('button[data-a]'); if (!b) return;
-    ({ next: nextRound, lobby: toLobby, final: toFinal, reset: resetScores, propose: proposeQuestion })[b.dataset.a]();
+    ({ next: nextRound, lobby: toLobby, final: toFinal, reset: resetScores })[b.dataset.a]();
   };
   $('#host-actions').addEventListener('click', actions);
   $('#final-actions').addEventListener('click', actions);

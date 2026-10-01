@@ -124,7 +124,7 @@ h2 { margin: .3em 0 .5em; font-size: 1.3rem; }
 #room-main { flex: 1; display: flex; flex-direction: column; min-height: 0; }
 .view { display: none; flex: 1; min-height: 0; }
 .view.active { display: flex; }
-#v-lobby, #v-reveal, #v-final, #v-choose, #v-rara { overflow-y: auto; padding: 16px 16px calc(80px + var(--safe-b)); flex-direction: column; }
+#v-lobby, #v-reveal, #v-final, #v-choose { overflow-y: auto; padding: 16px 16px calc(80px + var(--safe-b)); flex-direction: column; }
 
 .lobby-grid { width: 100%; max-width: 1100px; margin: 0 auto; display: grid; gap: 14px; grid-template-columns: 1fr; }
 .lobby-grid .card { margin: 0; }
@@ -225,10 +225,6 @@ h2 { margin: .3em 0 .5em; font-size: 1.3rem; }
 .spect { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; padding: 10px; }
 .spect .mt { width: 26px; height: 26px; display: grid; place-items: center; font-weight: 800; font-size: .8rem; text-transform: uppercase; color: #fff; }
 
-/* ---------- rarità ---------- */
-.rara-mode { text-align: center; font-weight: 800; letter-spacing: .04em; margin-bottom: 4px; }
-.rara-q { text-align: center; font-size: 1.5rem; line-height: 1.25; margin: 10px 0 18px; }
-#rara-sent { min-height: 22px; margin: 4px 0 10px; }
 .chips { list-style: none; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
 .chips li { background: var(--bg2); border: 1px solid var(--line); border-radius: 99px; padding: 4px 10px; font-size: .85rem; }
 .chips li.ok { border-color: var(--g); }
@@ -249,19 +245,6 @@ h2 { margin: .3em 0 .5em; font-size: 1.3rem; }
 .host-actions { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin: 14px 0 30px; }
 .host-actions .btn { min-width: 180px; }
 
-.groups { display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px; }
-.group { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 12px; display: flex; gap: 12px; align-items: center; }
-.group.unique { border-color: #a78bfa; }
-.group.invalid { opacity: .5; }
-.group.invalid .gans { text-decoration: line-through; }
-.group.sel { outline: 2px solid var(--y); }
-.gbody { flex: 1; min-width: 0; }
-.gans { font-weight: 800; font-size: 1.1rem; word-break: break-word; }
-.gwho { font-size: .85rem; color: var(--muted); margin-top: 2px; }
-.gpts { font-weight: 800; font-size: 1.1rem; white-space: nowrap; }
-.gbtns { display: flex; flex-direction: column; gap: 4px; }
-.gbtns button { font-size: .75rem; padding: 4px 8px; border-radius: 7px; background: #2c2c33; border: 1px solid var(--line); white-space: nowrap; }
-.gbtns button.on { background: #7f1d1d; border-color: var(--danger); }
 .sprint-list { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin: 6px 0 14px; }
 .sprint-list span { background: var(--bg2); border: 1px solid var(--line); border-radius: 6px; padding: 3px 8px; font-weight: 700; text-transform: uppercase; font-size: .85rem; }
 

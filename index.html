@@ -21,7 +21,7 @@
     <div class="logo" aria-label="Paroliamo">
       <span class="lt g">P</span><span class="lt y">A</span><span class="lt b">R</span><span class="lt g">O</span><span class="lt b">L</span><span class="lt y">I</span><span class="lt g">A</span><span class="lt b">M</span><span class="lt g">O</span>
     </div>
-    <p class="tagline">Wordle e giochi di parole per le serate in chiamata</p>
+    <p class="tagline">Wordle in multiplayer per le serate in chiamata</p>
 
     <div class="card">
       <label class="lbl" for="name-input">Come ti chiami?</label>
@@ -100,13 +100,8 @@
         </div>
 
         <div class="card" id="cfg-card">
-          <div class="card-title">Scegli il gioco <span id="cfg-hostnote" class="muted small"></span></div>
-          <div class="game-pick" id="game-pick">
-            <button data-g="wordle"><span class="gp-ico">🟩</span><b>Wordle</b><small>Stessa parola per tutti</small></button>
-            <button data-g="rara"><span class="gp-ico">🦄</span><b>Rarità</b><small>Vince la risposta più rara</small></button>
-          </div>
-
-          <div id="cfg-wordle" class="cfg">
+          <div class="card-title">🟩 Wordle <span id="cfg-hostnote" class="muted small"></span></div>
+          <div id="cfg-wordle" class="cfg on">
             <div class="cfg-row"><span>Modalità</span>
               <div class="seg" data-k="wmode">
                 <button data-v="classic">Classica</button><button data-v="friend">Parola dell'amico</button><button data-v="sprint">Sprint</button>
@@ -127,19 +122,6 @@
             </div>
             <div class="cfg-row"><span>Hard mode</span>
               <div class="seg" data-k="hard"><button data-v="0">No</button><button data-v="1">Sì</button></div>
-            </div>
-          </div>
-
-          <div id="cfg-rara" class="cfg">
-            <div class="cfg-row"><span>Chi vince?</span>
-              <div class="seg" data-k="rmode"><button data-v="rara">La più rara 🦄</button><button data-v="comune">Il gregge 🐑</button><button data-v="mix">A sorpresa 🎲</button></div>
-            </div>
-            <div class="cfg-help" id="rmode-help"></div>
-            <div class="cfg-row"><span>Tempo</span>
-              <div class="seg" data-k="rtimer"><button data-v="30">30s</button><button data-v="45">45s</button><button data-v="60">60s</button><button data-v="90">90s</button></div>
-            </div>
-            <div class="cfg-row"><span>Domande sugli amici</span>
-              <div class="seg" data-k="rnames"><button data-v="0">No</button><button data-v="1">Sì</button></div>
             </div>
           </div>
 
@@ -183,20 +165,6 @@
           <h2><span id="chooser-name"></span> sta scegliendo la parola…</h2>
           <p class="muted">Preparati!</p>
         </div>
-      </div>
-    </section>
-
-    <!-- RARITÀ -->
-    <section id="v-rara" class="view">
-      <div class="card narrow">
-        <div id="rara-mode" class="rara-mode"></div>
-        <h2 id="rara-q" class="rara-q"></h2>
-        <form id="rara-form" class="join-row">
-          <input id="rara-input" maxlength="40" autocomplete="off" placeholder="La tua risposta">
-          <button class="btn primary" type="submit">Invia</button>
-        </form>
-        <div id="rara-sent" class="muted center"></div>
-        <ul id="rara-status" class="chips"></ul>
       </div>
     </section>
 
@@ -252,7 +220,6 @@
 <div id="float-layer" class="float-layer"></div>
 <div id="toast" class="toast"></div>
 
-<script src="questions.js"></script>
 <script src="net.js"></script>
 <script src="app.js"></script>
 </body>
