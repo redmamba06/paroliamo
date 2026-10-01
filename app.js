@@ -24,6 +24,21 @@ function toast(msg, ms = 1800) {
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => t.classList.remove('show'), ms);
 }
+// conferma dentro l'app: confirm() di sistema non funziona nei browser interni di WhatsApp, Telegram, Instagram…
+function ask(msg, okLabel = 'Sì', danger = false) {
+  return new Promise((resolve) => {
+    const box = $('#ask');
+    $('#ask-msg').textContent = msg;
+    const ok = $('#ask-ok');
+    ok.textContent = okLabel;
+    ok.className = 'btn ' + (danger ? 'danger' : 'primary');
+    box.classList.remove('hidden');
+    const done = (v) => { box.classList.add('hidden'); ok.onclick = null; $('#ask-no').onclick = null; box.onclick = null; resolve(v); };
+    ok.onclick = () => done(true);
+    $('#ask-no').onclick = () => done(false);
+    box.onclick = (e) => { if (e.target === box) done(false); };
+  });
+}
 function vibrate(p) { try { navigator.vibrate && navigator.vibrate(p); } catch {} }
 
 const EMOJIS = ['🦊', '🐼', '🐸', '🦁', '🐙', '🦄', '🐧', '🐨', '🐯', '🐵', '🦉', '🐢', '🐳', '🦖', '🐝', '🍕', '🌵', '👽', '🤖', '👻', '🎃', '🐲', '🦩', '🍩', '🐌', '🦀', '🥑', '🐷', '🦝', '🐻', '🍄', '⚡'];
@@ -621,9 +636,12 @@ async function enterRoom(code) {
 }
 
 async function leaveRoom() {
-  if (!confirm('Vuoi uscire dalla stanza?')) return;
-  try { await R.room.update('players/' + me.id, { left: true }); } catch {}
-  R.room.stop();
+  if (!(await ask('Vuoi uscire dalla stanza?', 'Esci', true))) return;
+  const room = R.room;
+  if (room) {
+    room.update('players/' + me.id, { left: true }).catch(() => {});
+    room.stop();
+  }
   clearInterval(R.hb); clearInterval(R.tick);
   Object.assign(R, { room: null, code: null, d: {}, sess: null, sessKey: null, reactSeen: null, viewRoundKey: null });
   sessionStorage.removeItem('pq_in_room');
@@ -826,8 +844,8 @@ const startGame = () => hostDo(async () => { await R.room.update('', await makeR
 const nextRound = () => hostDo(async () => { await R.room.update('', Object.assign(commitPatch(), await makeRoundPatch())); });
 const toLobby = () => hostDo(async () => { await R.room.update('', Object.assign(commitPatch(), { round: null })); });
 const toFinal = () => hostDo(async () => { await R.room.update('', Object.assign(commitPatch(), { round: { status: 'final', id: (R.d.seq || 0) } })); });
-const resetScores = () => {
-  if (!confirm('Azzerare tutti i punteggi della serata?')) return;
+const resetScores = async () => {
+  if (!(await ask('Azzerare tutti i punteggi della serata?', 'Azzera', true))) return;
   hostDo(async () => { await R.room.update('', { hist: null, round: null, seq: 0 }); });
 };
 

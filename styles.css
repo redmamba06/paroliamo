@@ -391,3 +391,9 @@ h2 { margin: .3em 0 .5em; font-size: 1.3rem; }
 .spect .mini, .spect .mrow { gap: 3px; }
 #spect-btn { margin-left: 6px; padding: 4px 10px; font-size: .82rem; }
 .spect-view .spect .mt { width: min(34px, 7.4vw); height: min(34px, 7.4vw); font-size: min(1rem, 4vw); }
+
+#ask { z-index: 70; }
+.ask-box { max-width: 340px; text-align: center; }
+.ask-box p { font-weight: 700; font-size: 1.05rem; margin: 6px 0 16px; }
+.ask-btns { display: flex; gap: 10px; justify-content: center; }
+.ask-btns .btn { flex: 1; }

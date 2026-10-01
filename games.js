@@ -505,8 +505,9 @@ GAMES.cah = {
       }
       const win = e.target.closest('[data-win]');
       if (win && r.phase === 'judge' && r.czar === me.id) {
-        if (!confirm('Fai vincere questa?')) return;
-        R.room.update('round', { status: 'reveal', win: win.dataset.win }).catch(() => {});
+        ask('Fai vincere questa carta?', '👑 Sì, vince lei').then(ok => {
+          if (ok && R.d.round && R.d.round.id === r.id) R.room.update('round', { status: 'reveal', win: win.dataset.win }).catch(() => {});
+        });
         return;
       }
       const b = e.target.closest('button[data-act]');
