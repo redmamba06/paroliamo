@@ -393,7 +393,7 @@ async function startSolo(len) {
 /* ================================================================
    STANZA ONLINE
    ================================================================ */
-const DEFAULT_CFG = { game: 'wordle', wmode: 'classic', lang: 'it', len: 5, diff: 'normale', timer: 0, hard: 0 };
+const DEFAULT_CFG = { game: 'wordle', wmode: 'classic', lang: 'it', len: 5, diff: 'normale', timer: 0, hard: 0, alen: 5, an: 10, aq: 30 };
 const STALE_MS = 16000;
 
 const R = {
@@ -503,9 +503,24 @@ function computeHost() {
 }
 
 /* ---------- punteggi ---------- */
+function anaWinners(r, i) {
+  const ans = (r.ans || {})['i' + i];
+  if (!ans) return [];
+  const ats = Object.values(ans).map(a => (a && typeof a.at === 'number' ? a.at : Infinity));
+  const first = Math.min(...ats);
+  return Object.keys(ans).filter(id => ans[id] && ans[id].at === first);
+}
+
 function roundResults(r) {
   const pts = {}, d = {};
   if (!r) return { pts, d };
+  if (r.game === 'anagram') {
+    Object.keys(r.parts || {}).forEach(id => { pts[id] = 0; d[id] = { a: 0 }; });
+    for (let i = 0; i < (r.n || 0); i++) {
+      anaWinners(r, i).forEach(id => { pts[id] = (pts[id] || 0) + 100; d[id] = { a: ((d[id] && d[id].a) || 0) + 1 }; });
+    }
+    return { pts, d };
+  }
   if (r.game === 'wordle') {
     const parts = Object.keys(r.parts || {});
     const p = r.p || {};
@@ -590,6 +605,23 @@ async function makeRoundPatch() {
       r.s = enc(list[rand(list.length)], R.code + id);
     }
     patch.round = r;
+  } else if (cfg.game === 'anagram') {
+    const lang = cfg.lang === 'en' ? 'en' : 'it';
+    const lens = cfg.alen === 'mix' ? [5, 6, 7] : [+cfg.alen || 5];
+    await Promise.all(lens.map(l => loadWords(l, lang)));
+    const n = +cfg.an || 10;
+    const used = d.usedW || {};
+    const words = [];
+    for (let i = 0; i < n; i++) {
+      const len = lens[rand(lens.length)];
+      let list = pool(len, cfg.diff, lang).filter(w => !used[w] && !words.includes(w) && new Set(w).size > 2);
+      if (!list.length) list = pool(len, cfg.diff, lang);
+      words.push(list[rand(list.length)]);
+    }
+    patch.round = {
+      id, game: 'anagram', lang, n, diff: cfg.diff, qdur: (+cfg.aq || 30) * 1000, idx: 0, qStart: Net.TS,
+      status: 'play', parts, seed: rand(2 ** 31), w: words.map((w, i) => enc(w, R.code + id + '_' + i))
+    };
   }
   return patch;
 }
@@ -604,6 +636,9 @@ function commitPatch() {
     const w = r.s ? dec(r.s, R.code + r.id) : '';
     title = r.wmode === 'sprint' ? `Sprint ${r.len} lettere` : `Wordle · ${w.toUpperCase()}`;
     if (w) patch['usedW/' + w] = true;
+  } else if (r.game === 'anagram') {
+    title = `Anagrammi · ${r.n} parole`;
+    for (let i = 0; i < r.n; i++) patch['usedW/' + anaWord(r, i)] = true;
   }
   patch['hist/r' + r.id] = { n: r.id, g: r.game, m: r.wmode || r.mode, t: title, pts: res.pts, d: res.d, at: Net.TS };
   return patch;
@@ -642,6 +677,7 @@ function hostTick() {
     return;
   }
   if (r.status !== 'play') return;
+  if (r.game === 'anagram') return anaHostTick(r, now);
   const parts = Object.keys(r.parts || {}).filter(id => pres.includes(id));
   const expired = r.dur && typeof r.startAt === 'number' && now > r.startAt + r.dur + 1200;
   let allDone = false;
@@ -659,8 +695,35 @@ function hostTick() {
   }
 }
 
+function anaHostTick(r, now) {
+  if (typeof r.qStart !== 'number') return;
+  const k = 'i' + r.idx;
+  const ans = (r.ans || {})[k];
+  const to = (r.to || {})[k];
+  let endAt = null;
+  if (ans) endAt = Math.min(...Object.values(ans).map(a => (a && typeof a.at === 'number' ? a.at : Infinity)));
+  else if (to) endAt = to;
+  else if (now > r.qStart + r.qdur + 300) {
+    R.busy = true;
+    R.room.set('round/to/' + k, Net.TS).catch(() => {}).finally(() => { R.busy = false; });
+    return;
+  }
+  // dopo una soluzione (o tempo scaduto) lascio vedere la parola per un attimo
+  if (endAt && isFinite(endAt) && now > endAt + 2800) {
+    R.busy = true;
+    const v = r.idx + 1 >= r.n ? { status: 'reveal' } : { idx: r.idx + 1, qStart: Net.TS };
+    R.room.update('round', v).catch(() => {}).finally(() => { R.busy = false; });
+  }
+}
+
 /* ---------- timer ---------- */
 function timeLeft(r) {
+  if (r && r.game === 'anagram') {
+    if (typeof r.qStart !== 'number') return null;
+    const k = 'i' + r.idx;
+    if ((r.ans || {})[k] || (r.to || {})[k]) return null;
+    return Math.max(0, r.qStart + r.qdur - R.room.now());
+  }
   if (!r || !r.dur || typeof r.startAt !== 'number') return null;
   return Math.max(0, r.startAt + r.dur - R.room.now());
 }
@@ -681,6 +744,7 @@ function onTick() {
       $('#wstatus').innerHTML = '⏰ <b>Tempo scaduto!</b>';
     }
   }
+  if (r && r.game === 'anagram' && r.status === 'play') renderAnaStatus(r);
   // ogni secondo circa: regia e presenza
   const sec = Math.floor(Date.now() / 1000);
   if (sec !== R._lastSec) { R._lastSec = sec; computeHost(); hostTick(); }
@@ -726,13 +790,15 @@ function onRoomData() {
   if (r && r.status === 'final') view = 'final';
   else if (r && r.status === 'reveal') view = 'reveal';
   else if (r && r.game === 'wordle') view = r.status === 'choose' ? 'choose' : 'wordle';
+  else if (r && r.game === 'anagram') view = 'anagram';
   $$('#room-main .view').forEach(v => v.classList.toggle('active', v.id === 'v-' + view));
   $('#s-room').classList.toggle('in-wordle', view === 'wordle');
-  if (view !== 'wordle') activeKey = null;
+  if (view !== 'wordle' && view !== 'anagram') activeKey = null;
   renderTop(r);
   if (view === 'lobby') renderLobby();
   if (view === 'wordle') renderWordle(r);
   if (view === 'choose') renderChoose(r);
+  if (view === 'anagram') renderAnagram(r);
   if (view === 'reveal') renderReveal(r);
   if (view === 'final') renderFinal();
   if (!$('#modal').classList.contains('hidden') && R.modalScore) openScores();
@@ -740,6 +806,7 @@ function onRoomData() {
 }
 
 function modeLabel(r) {
+  if (r.game === 'anagram') return `Anagrammi · ${r.lang === 'en' ? '🇬🇧 ' : ''}${r.n} parole`;
   const m = { classic: 'Wordle', friend: 'Parola dell\'amico', sprint: 'Sprint' }[r.wmode] || 'Wordle';
   return `${m} · ${r.lang === 'en' ? '🇬🇧 ' : ''}${r.len} lettere${r.hard ? ' · hard' : ''}`;
 }
@@ -767,6 +834,10 @@ function renderLobby() {
       ${isPresent(id) ? '' : '<span class="tag">offline</span>'}</li>`).join('');
 
   const cfg = Object.assign({}, DEFAULT_CFG, R.d.cfg || {});
+  $$('#game-pick button').forEach(b => b.classList.toggle('on', b.dataset.g === cfg.game));
+  $('#game-pick').style.pointerEvents = R.isHost ? '' : 'none';
+  $('#cfg-wordle').classList.toggle('on', cfg.game === 'wordle');
+  $('#cfg-anagram').classList.toggle('on', cfg.game === 'anagram');
   $$('#cfg-card .seg').forEach(seg => {
     const k = seg.dataset.k;
     let v = String(cfg[k]);
@@ -781,7 +852,7 @@ function renderLobby() {
   $('#cfg-hostnote').textContent = R.isHost ? '' : `(sceglie ${pname(host)})`;
   $('#start-btn').classList.toggle('hidden', !R.isHost);
   $('#wait-host').classList.toggle('hidden', R.isHost);
-  const needTwo = cfg.wmode === 'friend' && presentIds().length < 2;
+  const needTwo = cfg.game === 'wordle' && cfg.wmode === 'friend' && presentIds().length < 2;
   $('#start-btn').disabled = needTwo;
   $('#start-btn').textContent = needTwo ? 'Servono almeno 2 giocatori' : '▶️ Inizia';
   $('#lobby-score').innerHTML = scoreTable();
@@ -962,12 +1033,125 @@ async function confirmChoice() {
   await R.room.update('round', { s: enc(w, R.code + r.id), status: 'play', startAt: Net.TS });
 }
 
+/* ---------- anagrammi ---------- */
+const A = { key: null, word: '', letters: [], order: [], picks: [], locked: false, announced: null };
+
+function anaWord(r, i) {
+  const list = Array.isArray(r.w) ? r.w : arr(r.w);
+  return dec(list[i] || '', R.code + r.id + '_' + i);
+}
+function scramble(w, seed) {
+  let out = w;
+  for (let t = 0; t < 12 && out === w; t++) out = seededShuffle([...w], seed + t).join('');
+  return out;
+}
+
+async function renderAnagram(r) {
+  const key = `${R.code}:${r.id}:${r.idx}`;
+  if (A.key !== key) {
+    A.key = key;
+    A.word = anaWord(r, r.idx);
+    A.letters = [...scramble(A.word, (r.seed || 0) + r.idx * 7919)];
+    A.order = A.letters.map((_, i) => i);
+    A.picks = [];
+    A.locked = false;
+    $('#ana-slots').classList.remove('ok');
+    paintAna();
+    loadWords(A.word.length, r.lang);
+  }
+  activeKey = anaKey;
+  renderAnaStatus(r);
+  // classifica del round in corso
+  const res = roundResults(r);
+  const ids = Object.keys(Object.assign({}, r.parts, res.pts)).filter(id => isPresent(id) || res.pts[id]);
+  ids.sort((a, b) => (res.pts[b] || 0) - (res.pts[a] || 0));
+  $('#ana-board').innerHTML = ids.map(id => `<span>${who(id)}<b>${(res.d[id] && res.d[id].a) || 0}</b></span>`).join('');
+}
+
+function paintAna() {
+  $('#ana-letters').innerHTML = A.order.map(i =>
+    `<button data-i="${i}" class="${A.picks.includes(i) ? 'used' : ''}">${esc(A.letters[i])}</button>`).join('');
+  $('#ana-slots').innerHTML = A.letters.map((_, j) => {
+    const i = A.picks[j];
+    return `<div class="${i != null ? 'full' : ''}">${i != null ? esc(A.letters[i]) : ''}</div>`;
+  }).join('');
+}
+
+function renderAnaStatus(r) {
+  if (A.key !== `${R.code}:${r.id}:${r.idx}`) return;
+  const k = 'i' + r.idx;
+  const ans = (r.ans || {})[k];
+  const to = (r.to || {})[k];
+  $('#ana-count').textContent = `Parola ${r.idx + 1} di ${r.n} · ${A.word.length} lettere`;
+  const msg = $('#ana-msg');
+  if (ans) {
+    const win = anaWinners(r, r.idx);
+    const found = (ans[win[0]] || {}).w || A.word;
+    msg.innerHTML = `${win.map(who).join(', ')} ${win.length > 1 ? 'l\'hanno trovata' : 'l\'ha trovata'}! <span class="big">${esc(found)}</span>${found !== A.word ? `<span class="muted small">valeva anche ${esc(A.word.toUpperCase())}</span>` : ''}`;
+    A.locked = true;
+    if (A.announced !== A.key) {
+      A.announced = A.key;
+      if (win.includes(me.id)) { Sfx.play('win'); confetti(25); } else Sfx.play('lose');
+    }
+  } else if (to) {
+    msg.innerHTML = `⏰ Nessuno! Era <span class="big">${esc(A.word)}</span>`;
+    A.locked = true;
+    if (A.announced !== A.key) { A.announced = A.key; Sfx.play('lose'); }
+  } else if (typeof r.qStart === 'number' && R.room.now() > r.qStart + r.qdur / 2 && Date.now() > (A.errUntil || 0)) {
+    msg.innerHTML = `💡 Inizia con <b>${esc(A.word[0].toUpperCase())}</b>`;
+  } else if (Date.now() > (A.errUntil || 0)) msg.innerHTML = '';
+}
+
+function anaPick(i) {
+  if (A.locked || A.picks.includes(i)) return;
+  A.picks.push(i);
+  paintAna();
+  if (A.picks.length === A.letters.length) anaCheck();
+}
+
+function anaKey(k) {
+  if (A.locked) return;
+  if (k === 'back') { A.picks.pop(); paintAna(); return; }
+  if (k === 'enter') { if (A.picks.length === A.letters.length) anaCheck(); return; }
+  const i = A.order.find(j => A.letters[j] === k && !A.picks.includes(j));
+  if (i == null) { const sl = $('#ana-slots'); sl.classList.remove('shake'); void sl.offsetWidth; sl.classList.add('shake'); return; }
+  anaPick(i);
+}
+
+async function anaCheck() {
+  const r = R.d.round;
+  if (!r || r.game !== 'anagram' || A.locked) return;
+  const guess = A.picks.map(i => A.letters[i]).join('');
+  const W = await loadWords(guess.length, r.lang);
+  if (guess === A.word || W.set.has(guess)) {
+    A.locked = true;
+    $('#ana-slots').classList.add('ok');
+    R.room.set(`round/ans/i${r.idx}/${me.id}`, { w: guess, at: Net.TS }).catch(() => { A.locked = false; toast('Errore di rete'); });
+  } else {
+    const sl = $('#ana-slots');
+    sl.classList.remove('shake'); void sl.offsetWidth; sl.classList.add('shake');
+    vibrate(80);
+    $('#ana-msg').innerHTML = 'Non è una parola 🤨';
+    A.errUntil = Date.now() + 1200;
+    setTimeout(() => { if (!A.locked) { A.picks = []; paintAna(); } }, 450);
+  }
+}
+
 /* ---------- risultati del round ---------- */
 function renderReveal(r) {
   activeKey = null;
   const res = roundResults(r);
   const head = $('#reveal-head'), body = $('#reveal-body');
-  if (r.game === 'wordle' && r.wmode === 'sprint') {
+  if (r.game === 'anagram') {
+    head.innerHTML = `<h2>🔀 Anagrammi finiti!</h2>`;
+    body.innerHTML = `<div class="ana-list">${Array.from({ length: r.n }, (_, i) => {
+      const win = anaWinners(r, i);
+      const found = win.length ? ((r.ans || {})['i' + i][win[0]] || {}).w : '';
+      const target = anaWord(r, i);
+      return `<div><span class="w">${esc(target)}${found && found !== target ? ` <span class="muted small">(${esc(found)})</span>` : ''}</span>
+        <span>${win.length ? win.map(who).join(', ') : '<span class="muted">nessuno</span>'}</span></div>`;
+    }).join('')}</div>`;
+  } else if (r.game === 'wordle' && r.wmode === 'sprint') {
     if (!WORDS[(r.lang || 'it') + r.len]) { loadWords(r.len, r.lang).then(() => { if (R.d.round === r) renderReveal(r); }); return; }
     const p = r.p || {};
     const maxN = Math.max(0, ...Object.values(p).map(x => (x && x.n) || 0));
@@ -1022,6 +1206,7 @@ function awards() {
   best(tally((h, d) => h.g === 'wordle' && d.t && d.t <= 2 ? 1 : 0), 'Colpo di fortuna', '🍀', 'parole in ≤2 tentativi');
   best(tally((h, d) => h.g === 'wordle' && d.first ? 1 : 0), 'Il più veloce', '⚡', 'volte primo');
   best(tally((h, d) => h.g === 'wordle' && h.m !== 'sprint' && !d.chooser && d.t === 0 ? 1 : 0), 'Sfiga cosmica', '💀', 'parole mancate');
+  best(tally((h, d) => h.g === 'anagram' && d.a ? d.a : 0), 'Re degli anagrammi', '🔀', 'anagrammi risolti');
   best(tally((h, d) => h.g === 'wordle' && d.sol ? d.sol : 0), 'Macchina da sprint', '🏎️', 'parole in sprint');
   return out.join('');
 }
@@ -1070,6 +1255,11 @@ function bindRoomUi() {
     setCfg(b.parentElement.dataset.k, b.dataset.v);
   });
   $('#start-btn').onclick = startGame;
+  $('#game-pick').onclick = (e) => { const b = e.target.closest('button'); if (b) setCfg('game', b.dataset.g); };
+  $('#ana-letters').onclick = (e) => { const b = e.target.closest('button[data-i]'); if (b) anaPick(+b.dataset.i); };
+  $('#ana-back').onclick = () => anaKey('back');
+  $('#ana-clear').onclick = () => { A.picks = []; paintAna(); };
+  $('#ana-shuffle').onclick = () => { A.picks = []; A.order = seededShuffle(A.order, rand(1e9)); paintAna(); };
   $('#choose-btn').onclick = confirmChoice;
   $('#choose-input').onkeydown = (e) => { if (e.key === 'Enter') confirmChoice(); };
   $('#choose-rand').onclick = async () => {

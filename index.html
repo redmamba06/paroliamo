@@ -100,8 +100,12 @@
         </div>
 
         <div class="card" id="cfg-card">
-          <div class="card-title">🟩 Wordle <span id="cfg-hostnote" class="muted small"></span></div>
-          <div id="cfg-wordle" class="cfg on">
+          <div class="card-title">Scegli il gioco <span id="cfg-hostnote" class="muted small"></span></div>
+          <div class="game-pick" id="game-pick">
+            <button data-g="wordle"><span class="gp-ico">🟩</span><b>Wordle</b><small>Stessa parola per tutti</small></button>
+            <button data-g="anagram"><span class="gp-ico">🔀</span><b>Anagrammi</b><small>Il più veloce vince</small></button>
+          </div>
+          <div id="cfg-wordle" class="cfg">
             <div class="cfg-row"><span>Modalità</span>
               <div class="seg" data-k="wmode">
                 <button data-v="classic">Classica</button><button data-v="friend">Parola dell'amico</button><button data-v="sprint">Sprint</button>
@@ -122,6 +126,25 @@
             </div>
             <div class="cfg-row"><span>Hard mode</span>
               <div class="seg" data-k="hard"><button data-v="0">No</button><button data-v="1">Sì</button></div>
+            </div>
+          </div>
+
+          <div id="cfg-anagram" class="cfg">
+            <div class="cfg-help">Escono le lettere mescolate di una parola: il primo che la ricompone prende 100 punti. Vale qualsiasi parola vera con quelle lettere. A metà tempo arriva un aiutino.</div>
+            <div class="cfg-row"><span>Lingua</span>
+              <div class="seg" data-k="lang"><button data-v="it">🇮🇹 Italiano</button><button data-v="en">🇬🇧 English</button></div>
+            </div>
+            <div class="cfg-row"><span>Lettere</span>
+              <div class="seg" data-k="alen"><button data-v="5">5</button><button data-v="6">6</button><button data-v="7">7</button><button data-v="mix">Mix</button></div>
+            </div>
+            <div class="cfg-row"><span>Parole</span>
+              <div class="seg" data-k="diff"><button data-v="facile">Comuni</button><button data-v="normale">Normali</button><button data-v="difficile">Toste</button></div>
+            </div>
+            <div class="cfg-row"><span>Quante</span>
+              <div class="seg" data-k="an"><button data-v="10">10</button><button data-v="15">15</button><button data-v="20">20</button></div>
+            </div>
+            <div class="cfg-row"><span>Tempo a parola</span>
+              <div class="seg" data-k="aq"><button data-v="20">20s</button><button data-v="30">30s</button><button data-v="45">45s</button></div>
             </div>
           </div>
 
@@ -165,6 +188,22 @@
           <h2><span id="chooser-name"></span> sta scegliendo la parola…</h2>
           <p class="muted">Preparati!</p>
         </div>
+      </div>
+    </section>
+
+    <!-- ANAGRAMMI -->
+    <section id="v-anagram" class="view">
+      <div class="ana-wrap">
+        <div id="ana-count" class="ana-count"></div>
+        <div id="ana-letters" class="ana-letters"></div>
+        <div id="ana-slots" class="ana-slots"></div>
+        <div id="ana-msg" class="ana-msg"></div>
+        <div class="ana-btns">
+          <button class="btn" id="ana-back">⌫</button>
+          <button class="btn" id="ana-shuffle">🔀 Rimescola</button>
+          <button class="btn" id="ana-clear">✖ Pulisci</button>
+        </div>
+        <div id="ana-board" class="ana-board"></div>
       </div>
     </section>
 

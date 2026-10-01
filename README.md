@@ -2,6 +2,7 @@
 
 Wordle multiplayer per le serate in chiamata. Web app statica (HTML/CSS/JS, nessuna build).
 
+- **Anagrammi a raffica**: lettere mescolate uguali per tutti, il primo che ricompone la parola prende 100 punti (aiutino a metà tempo).
 - **Wordle** (🇮🇹 / 🇬🇧, 4–7 lettere): *Classica* (stessa parola per tutti), *Parola dell'amico* (a turno uno sceglie la parola), *Sprint* (più parole possibile a tempo). A sinistra si vedono i colori degli avversari, non le lettere.
 - Punteggio cumulativo della serata, premi finali, reazioni emoji, allenamento in solitaria.
 

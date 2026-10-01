@@ -124,7 +124,7 @@ h2 { margin: .3em 0 .5em; font-size: 1.3rem; }
 #room-main { flex: 1; display: flex; flex-direction: column; min-height: 0; }
 .view { display: none; flex: 1; min-height: 0; }
 .view.active { display: flex; }
-#v-lobby, #v-reveal, #v-final, #v-choose { overflow-y: auto; padding: 16px 16px calc(80px + var(--safe-b)); flex-direction: column; }
+#v-lobby, #v-reveal, #v-final, #v-choose, #v-anagram { overflow-y: auto; padding: 16px 16px calc(80px + var(--safe-b)); flex-direction: column; }
 
 .lobby-grid { width: 100%; max-width: 1100px; margin: 0 auto; display: grid; gap: 14px; grid-template-columns: 1fr; }
 .lobby-grid .card { margin: 0; }
@@ -298,3 +298,28 @@ h2 { margin: .3em 0 .5em; font-size: 1.3rem; }
 @keyframes floatUp { 0% { transform: translateY(0) scale(.6); opacity: 0 } 10% { opacity: 1; transform: translateY(-10vh) scale(1.1) } 100% { transform: translateY(-85vh) scale(1); opacity: 0 } }
 @keyframes fall { to { transform: translateY(105vh) rotate(720deg); } }
 @keyframes wobble { 0%,100% { transform: rotate(-10deg) } 50% { transform: rotate(10deg) } }
+
+/* ---------- anagrammi ---------- */
+.ana-wrap { width: 100%; max-width: 560px; margin: 0 auto; display: flex; flex-direction: column; align-items: center; gap: 14px; padding-top: 6px; }
+.ana-count { color: var(--muted); font-weight: 700; }
+.ana-letters, .ana-slots { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; }
+.ana-letters button, .ana-slots div {
+  width: min(56px, 12.5vw); height: min(56px, 12.5vw); border-radius: 10px; display: grid; place-items: center;
+  font-weight: 800; font-size: min(1.6rem, 7vw); text-transform: uppercase; user-select: none;
+}
+.ana-letters button { background: var(--y); color: #fff; border: 0; box-shadow: 0 4px 0 #8a7a2c; transition: transform .08s, opacity .15s; touch-action: manipulation; }
+.ana-letters button:active { transform: translateY(3px); box-shadow: 0 1px 0 #8a7a2c; }
+.ana-letters button.used { opacity: .18; pointer-events: none; }
+.ana-slots div { border: 2px solid var(--line); background: var(--bg2); }
+.ana-slots div.full { border-color: #5a5a62; animation: pop .1s; }
+.ana-slots.ok div { background: var(--g); border-color: transparent; color: #fff; }
+.ana-slots.shake { animation: shake .4s; }
+.ana-msg { min-height: 52px; text-align: center; font-weight: 700; font-size: 1.05rem; }
+.ana-msg .big { font-size: 1.5rem; letter-spacing: .08em; text-transform: uppercase; display: block; }
+.ana-btns { display: flex; gap: 8px; }
+.ana-board { width: 100%; display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
+.ana-board span { background: var(--card); border: 1px solid var(--line); border-radius: 99px; padding: 5px 12px; font-size: .9rem; }
+.ana-board span b { margin-left: 4px; }
+.ana-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; }
+.ana-list div { display: flex; justify-content: space-between; gap: 10px; background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; }
+.ana-list .w { font-weight: 800; text-transform: uppercase; letter-spacing: .06em; }
