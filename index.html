@@ -1,0 +1,259 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+  <title>Paroliamo</title>
+  <meta name="description" content="Wordle e giochi di parole multiplayer da fare con gli amici in chiamata">
+  <meta name="theme-color" content="#121214">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icon-512.png">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<!-- ================= HOME ================= -->
+<section id="s-home" class="screen active">
+  <div class="home-wrap">
+    <div class="logo" aria-label="Paroliamo">
+      <span class="lt g">P</span><span class="lt y">A</span><span class="lt b">R</span><span class="lt g">O</span><span class="lt b">L</span><span class="lt y">I</span><span class="lt g">A</span><span class="lt b">M</span><span class="lt g">O</span>
+    </div>
+    <p class="tagline">Wordle e giochi di parole per le serate in chiamata</p>
+
+    <div class="card">
+      <label class="lbl" for="name-input">Come ti chiami?</label>
+      <div class="name-row">
+        <button id="emoji-btn" class="emoji-btn" title="Cambia avatar">🦊</button>
+        <input id="name-input" maxlength="14" placeholder="Il tuo nome" autocomplete="nickname">
+      </div>
+      <div id="emoji-picker" class="emoji-picker hidden"></div>
+    </div>
+
+    <div id="join-banner" class="card join-banner hidden">
+      Ti hanno invitato nella stanza <b id="join-banner-code"></b> 🎉
+      <button id="join-banner-btn" class="btn primary big">Entra</button>
+    </div>
+
+    <div class="card">
+      <button id="create-btn" class="btn primary big">🎉 Crea una stanza</button>
+      <div class="join-row">
+        <input id="code-input" maxlength="4" placeholder="CODICE" autocapitalize="characters" autocomplete="off">
+        <button id="join-btn" class="btn">Entra</button>
+      </div>
+      <p class="muted small">Crea la stanza e manda il link agli amici: tutti vedono la stessa parola.</p>
+    </div>
+
+    <div class="card">
+      <div class="solo-head">
+        <b>🎯 Allenati da solo</b>
+      </div>
+      <div class="solo-head">
+        <div class="seg small" id="solo-lang"><button data-v="it">🇮🇹</button><button data-v="en">🇬🇧</button></div>
+        <div class="seg small" id="solo-len">
+          <button data-v="4">4</button><button data-v="5" class="on">5</button><button data-v="6">6</button><button data-v="7">7</button>
+        </div>
+      </div>
+      <button id="solo-btn" class="btn">Gioca una parola</button>
+    </div>
+
+    <details class="card settings-box" id="db-box">
+      <summary>⚙️ Impostazioni</summary>
+      <label class="check"><input type="checkbox" id="cb-toggle"> Colori ad alto contrasto (daltonici)</label>
+      <label class="check"><input type="checkbox" id="sound-toggle" checked> Effetti sonori</label>
+      <div class="db-cfg">
+        <div class="lbl">Database per il multiplayer</div>
+        <div class="muted small">Usa lo stesso database Firebase di HitQuiz. Incolla il <i>databaseURL</i> (es. https://nome-progetto-default-rtdb.firebaseio.com).</div>
+        <div class="join-row">
+          <input id="db-input" placeholder="https://…firebaseio.com" autocomplete="off">
+          <button id="db-save" class="btn">Salva</button>
+        </div>
+        <div id="db-status" class="muted small"></div>
+      </div>
+    </details>
+  </div>
+</section>
+
+<!-- ================= STANZA ================= -->
+<section id="s-room" class="screen">
+  <header class="topbar">
+    <button id="leave-btn" class="icon-btn" title="Esci">✕</button>
+    <button id="code-chip" class="code-chip" title="Copia il link d'invito">Stanza <b id="room-code">----</b> <span>🔗</span></button>
+    <div id="round-info" class="round-info"></div>
+    <div id="timer" class="timer hidden"></div>
+    <button id="score-btn" class="icon-btn" title="Classifica">🏆</button>
+  </header>
+
+  <div id="conn-warn" class="conn-warn hidden">Connessione persa, mi riconnetto…</div>
+
+  <main id="room-main">
+
+    <!-- LOBBY -->
+    <section id="v-lobby" class="view">
+      <div class="lobby-grid">
+        <div class="card">
+          <div class="card-title">Giocatori <span id="lobby-count" class="muted"></span></div>
+          <ul id="lobby-players" class="plist"></ul>
+          <button id="invite-btn" class="btn">📨 Invita amici (copia link)</button>
+        </div>
+
+        <div class="card" id="cfg-card">
+          <div class="card-title">Scegli il gioco <span id="cfg-hostnote" class="muted small"></span></div>
+          <div class="game-pick" id="game-pick">
+            <button data-g="wordle"><span class="gp-ico">🟩</span><b>Wordle</b><small>Stessa parola per tutti</small></button>
+            <button data-g="rara"><span class="gp-ico">🦄</span><b>Rarità</b><small>Vince la risposta più rara</small></button>
+          </div>
+
+          <div id="cfg-wordle" class="cfg">
+            <div class="cfg-row"><span>Modalità</span>
+              <div class="seg" data-k="wmode">
+                <button data-v="classic">Classica</button><button data-v="friend">Parola dell'amico</button><button data-v="sprint">Sprint</button>
+              </div>
+            </div>
+            <div class="cfg-help" id="wmode-help"></div>
+            <div class="cfg-row"><span>Lingua</span>
+              <div class="seg" data-k="lang"><button data-v="it">🇮🇹 Italiano</button><button data-v="en">🇬🇧 English</button></div>
+            </div>
+            <div class="cfg-row"><span>Lettere</span>
+              <div class="seg" data-k="len"><button data-v="4">4</button><button data-v="5">5</button><button data-v="6">6</button><button data-v="7">7</button></div>
+            </div>
+            <div class="cfg-row"><span>Parole</span>
+              <div class="seg" data-k="diff"><button data-v="facile">Comuni</button><button data-v="normale">Normali</button><button data-v="difficile">Toste</button></div>
+            </div>
+            <div class="cfg-row" id="row-timer"><span>Tempo</span>
+              <div class="seg" data-k="timer"><button data-v="0">∞</button><button data-v="90">1:30</button><button data-v="180">3:00</button><button data-v="300">5:00</button></div>
+            </div>
+            <div class="cfg-row"><span>Hard mode</span>
+              <div class="seg" data-k="hard"><button data-v="0">No</button><button data-v="1">Sì</button></div>
+            </div>
+          </div>
+
+          <div id="cfg-rara" class="cfg">
+            <div class="cfg-row"><span>Chi vince?</span>
+              <div class="seg" data-k="rmode"><button data-v="rara">La più rara 🦄</button><button data-v="comune">Il gregge 🐑</button><button data-v="mix">A sorpresa 🎲</button></div>
+            </div>
+            <div class="cfg-help" id="rmode-help"></div>
+            <div class="cfg-row"><span>Tempo</span>
+              <div class="seg" data-k="rtimer"><button data-v="30">30s</button><button data-v="45">45s</button><button data-v="60">60s</button><button data-v="90">90s</button></div>
+            </div>
+            <div class="cfg-row"><span>Domande sugli amici</span>
+              <div class="seg" data-k="rnames"><button data-v="0">No</button><button data-v="1">Sì</button></div>
+            </div>
+          </div>
+
+          <button id="start-btn" class="btn primary big">▶️ Inizia</button>
+          <div id="wait-host" class="muted center hidden">Aspettiamo che l'host faccia partire il gioco…</div>
+        </div>
+
+        <div class="card" id="lobby-score-card">
+          <div class="card-title">Classifica della serata</div>
+          <div id="lobby-score"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- WORDLE -->
+    <section id="v-wordle" class="view">
+      <aside id="opps" class="opps"></aside>
+      <div class="wcenter">
+        <div id="wstatus" class="wstatus"></div>
+        <div id="board" class="board"></div>
+        <div id="kbd" class="kbd"></div>
+      </div>
+    </section>
+
+    <!-- SCELTA PAROLA (parola dell'amico) -->
+    <section id="v-choose" class="view">
+      <div class="card narrow center">
+        <div id="choose-me" class="hidden">
+          <div class="big-emoji">🤫</div>
+          <h2>Tocca a te scegliere la parola!</h2>
+          <p class="muted">Gli altri dovranno indovinarla. Più tentativi gli servono, più punti fai.</p>
+          <div class="join-row">
+            <input id="choose-input" autocomplete="off" autocapitalize="off" spellcheck="false">
+            <button id="choose-btn" class="btn primary">Conferma</button>
+          </div>
+          <button id="choose-rand" class="btn ghost">🎲 Suggeriscimene una</button>
+          <div id="choose-msg" class="muted small"></div>
+        </div>
+        <div id="choose-other" class="hidden">
+          <div class="big-emoji spin">🤔</div>
+          <h2><span id="chooser-name"></span> sta scegliendo la parola…</h2>
+          <p class="muted">Preparati!</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- RARITÀ -->
+    <section id="v-rara" class="view">
+      <div class="card narrow">
+        <div id="rara-mode" class="rara-mode"></div>
+        <h2 id="rara-q" class="rara-q"></h2>
+        <form id="rara-form" class="join-row">
+          <input id="rara-input" maxlength="40" autocomplete="off" placeholder="La tua risposta">
+          <button class="btn primary" type="submit">Invia</button>
+        </form>
+        <div id="rara-sent" class="muted center"></div>
+        <ul id="rara-status" class="chips"></ul>
+      </div>
+    </section>
+
+    <!-- RISULTATI DEL ROUND -->
+    <section id="v-reveal" class="view">
+      <div class="reveal-wrap">
+        <div id="reveal-head" class="reveal-head"></div>
+        <div id="reveal-body"></div>
+        <div id="reveal-score" class="card"></div>
+        <div id="host-actions" class="host-actions"></div>
+      </div>
+    </section>
+
+    <!-- FINALE -->
+    <section id="v-final" class="view">
+      <div class="reveal-wrap">
+        <h2 class="center">🏁 Classifica finale</h2>
+        <div id="podium" class="podium"></div>
+        <div id="awards" class="awards"></div>
+        <div id="final-list" class="card"></div>
+        <div id="final-actions" class="host-actions"></div>
+      </div>
+    </section>
+  </main>
+
+  <div id="react-bar" class="react-bar"></div>
+</section>
+
+<!-- ================= SOLO ================= -->
+<section id="s-solo" class="screen">
+  <header class="topbar">
+    <button id="solo-back" class="icon-btn" title="Indietro">←</button>
+    <div class="round-info"><b>Allenamento</b> · <span id="solo-info"></span></div>
+    <button id="solo-new" class="btn small">Nuova parola</button>
+  </header>
+  <main class="solo-main">
+    <div class="wcenter">
+      <div id="solo-status" class="wstatus"></div>
+      <div id="solo-board" class="board"></div>
+      <div id="solo-kbd" class="kbd"></div>
+    </div>
+  </main>
+</section>
+
+<!-- classifica in sovrimpressione -->
+<div id="modal" class="modal hidden">
+  <div class="modal-box">
+    <button class="icon-btn modal-x" id="modal-x">✕</button>
+    <div id="modal-body"></div>
+  </div>
+</div>
+
+<div id="float-layer" class="float-layer"></div>
+<div id="toast" class="toast"></div>
+
+<script src="questions.js"></script>
+<script src="net.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
