@@ -8,5 +8,7 @@ Wordle multiplayer per le serate in chiamata. Web app statica (HTML/CSS/JS, ness
 
 Multiplayer: Firebase Realtime Database via REST + SSE (stesso database di HitQuiz, stanze sotto `/rooms/pq-CODICE`). Il link d'invito porta con sé l'URL del database.
 
+Ad ogni rilascio aumentare il numero `?v=` di css/js in `index.html` (evita la cache dei telefoni).
+
 Sviluppo: `python3 tools/devserver.py` avvia file statici + finto Firebase su `http://localhost:8480/fb`.
 Parole: `tools/build_words.py` (Morph-it + FrequencyWords) e `tools/build_words_en.py`, sorgenti in `data_src/` (non versionate).
