@@ -1,8 +1,11 @@
 # Paroliamo
 
-Wordle multiplayer per le serate in chiamata. Web app statica (HTML/CSS/JS, nessuna build).
+Giochi di parole multiplayer per le serate in chiamata. Web app statica (HTML/CSS/JS, nessuna build).
 
 - **Anagrammi a raffica**: lettere mescolate uguali per tutti, il primo che ricompone la parola prende 100 punti (aiutino a metà tempo).
+- **Nomi Cose Città**: lettera a caso, categorie base + categorie aggiunte dai giocatori, STOP!, parole uniche 100 / ripetute 50, bocciatura a voti.
+- **Nominane 3**: a turno, si dicono a voce 3 cose di una categoria entro il tempo; gli altri votano.
+- **Carte Scorrette**: stile Cards Against Humanity con carte originali in italiano, giudice a turno, carta "scrivi la tua".
 - **Wordle** (🇮🇹 / 🇬🇧, 4–7 lettere): *Classica* (stessa parola per tutti), *Parola dell'amico* (a turno uno sceglie la parola), *Sprint* (più parole possibile a tempo). A sinistra si vedono i colori degli avversari, non le lettere.
 - Punteggio cumulativo della serata, premi finali, reazioni emoji, allenamento in solitaria.
 

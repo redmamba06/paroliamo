@@ -11,7 +11,7 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="icon-512.png">
-  <link rel="stylesheet" href="styles.css?v=5">
+  <link rel="stylesheet" href="styles.css?v=6">
 </head>
 <body>
 
@@ -21,7 +21,7 @@
     <div class="logo" aria-label="Paroliamo">
       <span class="lt g">P</span><span class="lt y">A</span><span class="lt b">R</span><span class="lt g">O</span><span class="lt b">L</span><span class="lt y">I</span><span class="lt g">A</span><span class="lt b">M</span><span class="lt g">O</span>
     </div>
-    <p class="tagline">Wordle e anagrammi per le serate in chiamata</p>
+    <p class="tagline">Giochi di parole per le serate in chiamata</p>
 
     <div class="card">
       <label class="lbl" for="name-input">Come ti chiami?</label>
@@ -108,8 +108,11 @@
           <div class="game-pick" id="game-pick">
             <button data-g="wordle"><span class="gp-ico">🟩</span><b>Wordle</b><small>Stessa parola per tutti</small></button>
             <button data-g="anagram"><span class="gp-ico">🔀</span><b>Anagrammi</b><small>Il più veloce vince</small></button>
+            <button data-g="ncc"><span class="gp-ico">🏙️</span><b>Nomi Cose Città</b><small>Una lettera, tante categorie</small></button>
+            <button data-g="tre"><span class="gp-ico">⏱️</span><b>Nominane 3</b><small>A voce, uno alla volta</small></button>
+            <button data-g="cah"><span class="gp-ico">🃏</span><b>Carte Scorrette</b><small>La risposta più assurda</small></button>
           </div>
-          <div id="cfg-wordle" class="cfg">
+          <div id="cfg-wordle" class="cfg" data-g="wordle">
             <div class="cfg-row"><span>Modalità</span>
               <div class="seg" data-k="wmode">
                 <button data-v="classic">Classica</button><button data-v="friend">Parola dell'amico</button><button data-v="sprint">Sprint</button>
@@ -133,7 +136,7 @@
             </div>
           </div>
 
-          <div id="cfg-anagram" class="cfg">
+          <div id="cfg-anagram" class="cfg" data-g="anagram">
             <div class="cfg-help">Escono le lettere mescolate di una parola: il primo che la ricompone prende 100 punti. Vale qualsiasi parola vera con quelle lettere. A metà tempo arriva un aiutino.</div>
             <div class="cfg-row"><span>Lingua</span>
               <div class="seg" data-k="lang"><button data-v="it">🇮🇹 Italiano</button><button data-v="en">🇬🇧 English</button></div>
@@ -149,6 +152,38 @@
             </div>
             <div class="cfg-row"><span>Tempo a parola</span>
               <div class="seg" data-k="aq"><button data-v="20">20s</button><button data-v="30">30s</button><button data-v="45">45s</button></div>
+            </div>
+          </div>
+
+          <div id="cfg-ncc" class="cfg" data-g="ncc">
+            <div class="cfg-help">Esce una lettera: scrivete una parola per ogni categoria. Parola che ha scritto solo uno: 100 punti, ripetuta: 50, vuota: 0. Chi finisce preme STOP e gli altri hanno 10 secondi.</div>
+            <div class="cfg-row"><span>Round</span>
+              <div class="seg" data-k="nccN"><button data-v="3">3</button><button data-v="5">5</button><button data-v="8">8</button></div>
+            </div>
+            <div class="cfg-row"><span>Tempo</span>
+              <div class="seg" data-k="nccT"><button data-v="60">1:00</button><button data-v="90">1:30</button><button data-v="120">2:00</button><button data-v="180">3:00</button></div>
+            </div>
+            <div class="lbl" style="margin-top:12px">Categorie</div>
+            <div id="ncc-base" class="cat-chips"></div>
+            <div class="lbl" style="margin-top:12px">Le vostre categorie</div>
+            <div id="ncc-custom" class="cat-chips"></div>
+            <div class="join-row"><input id="ncc-add-input" maxlength="40" placeholder="Aggiungi una categoria simpatica"><button class="btn" id="ncc-add-btn">＋</button></div>
+          </div>
+
+          <div id="cfg-tre" class="cfg" data-g="tre">
+            <div class="cfg-help">Uno alla volta: chi è di turno preme VIA, vede una categoria (es. "squadre NBA") e deve dirne 3 ad alta voce in chiamata prima che scada il tempo. Gli altri votano se ce l'ha fatta: +100.</div>
+            <div class="cfg-row"><span>Secondi</span>
+              <div class="seg" data-k="treT"><button data-v="5">5</button><button data-v="10">10</button><button data-v="15">15</button><button data-v="20">20</button></div>
+            </div>
+            <div class="cfg-row"><span>Turni a testa</span>
+              <div class="seg" data-k="treR"><button data-v="1">1</button><button data-v="2">2</button><button data-v="3">3</button></div>
+            </div>
+          </div>
+
+          <div id="cfg-cah" class="cfg" data-g="cah">
+            <div class="cfg-help">A turno uno fa il giudice 👑. Esce una carta nera con una frase da completare: gli altri giocano la carta bianca più assurda (o ne scrivono una). Il giudice sceglie la migliore: +100. Serve un minimo di 3 giocatori.</div>
+            <div class="cfg-row"><span>Round</span>
+              <div class="seg" data-k="cahN"><button data-v="5">5</button><button data-v="10">10</button><button data-v="15">15</button></div>
             </div>
           </div>
 
@@ -211,6 +246,35 @@
       </div>
     </section>
 
+    <!-- NOMI COSE CITTÀ -->
+    <section id="v-ncc" class="view">
+      <div class="ncc-wrap">
+        <div class="ncc-big" id="ncc-letter"></div>
+        <div id="ncc-banner" class="ncc-banner"></div>
+        <div id="ncc-list" class="ncc-list"></div>
+        <button id="ncc-stop" class="btn danger big">🛑 STOP!</button>
+        <ul id="ncc-status" class="chips"></ul>
+      </div>
+    </section>
+
+    <!-- NOMINANE 3 -->
+    <section id="v-tre" class="view">
+      <div class="card narrow center">
+        <div id="tre-who" class="tre-who"></div>
+        <div id="tre-main"></div>
+      </div>
+    </section>
+
+    <!-- CARTE SCORRETTE -->
+    <section id="v-cah" class="view">
+      <div class="cah-wrap">
+        <div id="cah-czar" class="muted center"></div>
+        <div id="cah-black" class="cah-card black"></div>
+        <ul id="cah-status" class="chips"></ul>
+        <div id="cah-main"></div>
+      </div>
+    </section>
+
     <!-- RISULTATI DEL ROUND -->
     <section id="v-reveal" class="view">
       <div class="reveal-wrap">
@@ -265,7 +329,9 @@
 <div id="float-layer" class="float-layer"></div>
 <div id="toast" class="toast"></div>
 
-<script src="net.js?v=5"></script>
-<script src="app.js?v=5"></script>
+<script src="content.js?v=6"></script>
+<script src="net.js?v=6"></script>
+<script src="games.js?v=6"></script>
+<script src="app.js?v=6"></script>
 </body>
 </html>

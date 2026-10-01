@@ -546,7 +546,7 @@ function soloAnagram(W, len, lang) {
 /* ================================================================
    STANZA ONLINE
    ================================================================ */
-const DEFAULT_CFG = { game: 'wordle', wmode: 'classic', lang: 'it', len: 5, diff: 'normale', timer: 0, hard: 0, alen: 5, an: 10, aq: 30 };
+const DEFAULT_CFG = { game: 'wordle', wmode: 'classic', lang: 'it', len: 5, diff: 'normale', timer: 0, hard: 0, alen: 5, an: 10, aq: 30, nccN: 5, nccT: 90, treT: 10, treR: 1, cahN: 10 };
 const STALE_MS = 16000;
 
 const R = {
@@ -667,6 +667,7 @@ function anaWinners(r, i) {
 function roundResults(r) {
   const pts = {}, d = {};
   if (!r) return { pts, d };
+  if (GAMES[r.game]) return GAMES[r.game].results(r);
   if (r.game === 'anagram') {
     Object.keys(r.parts || {}).forEach(id => { pts[id] = 0; d[id] = { a: 0 }; });
     for (let i = 0; i < (r.n || 0); i++) {
@@ -703,20 +704,20 @@ function roundResults(r) {
   return { pts, d };
 }
 
-function totals() {
+function totals(mid) {
   const t = {};
   const add = (pts) => Object.entries(pts || {}).forEach(([id, v]) => { t[id] = (t[id] || 0) + (v || 0); });
   const hist = R.d.hist || {};
-  Object.values(hist).forEach(h => h && add(h.pts));
+  Object.values(hist).forEach(h => h && (mid == null || h.mid === mid) && add(h.pts));
   const r = R.d.round;
   let delta = {};
-  if (r && r.status === 'reveal' && !hist['r' + r.id]) { delta = roundResults(r).pts; add(delta); }
-  presentIds().forEach(id => { t[id] = t[id] || 0; });
+  if (r && r.status === 'reveal' && !hist['r' + r.id] && (mid == null || r.mid === mid)) { delta = roundResults(r).pts; add(delta); }
+  if (mid == null) presentIds().forEach(id => { t[id] = t[id] || 0; });
   return { t, delta };
 }
 
-function scoreTable(limit) {
-  const { t, delta } = totals();
+function scoreTable(limit, mid) {
+  const { t, delta } = totals(mid);
   const ids = Object.keys(t).sort((a, b) => t[b] - t[a]);
   if (!ids.length) return '<div class="muted">Ancora nessun punto.</div>';
   let pos = 0, last = null;
@@ -736,6 +737,20 @@ async function makeRoundPatch() {
   const pres = presentIds();
   const parts = Object.fromEntries(pres.map(x => [x, true]));
   const patch = { seq: id };
+  const G = GAMES[cfg.game];
+  if (G) {
+    // partita a più round: continua se l'ultimo round era dello stesso gioco e non è finita
+    const prev = d.round;
+    const cont = prev && prev.game === cfg.game && prev.N && prev.k < prev.N && prev.status === 'reveal';
+    const r = await G.make(cfg, { id, parts, pres, d, patch, prev: cont ? prev : null });
+    r.id = id; r.game = cfg.game;
+    r.k = cont ? prev.k + 1 : 1;
+    r.N = cont ? prev.N : G.count(cfg, pres);
+    r.mid = cont ? prev.mid : id;
+    if (!r.parts) r.parts = parts;
+    patch.round = r;
+    return patch;
+  }
   if (cfg.game === 'wordle') {
     const len = +cfg.len;
     const lang = cfg.lang === 'en' ? 'en' : 'it';
@@ -793,7 +808,8 @@ function commitPatch() {
     title = `Anagrammi · ${r.n} parole`;
     for (let i = 0; i < r.n; i++) patch['usedW/' + anaWord(r, i)] = true;
   }
-  patch['hist/r' + r.id] = { n: r.id, g: r.game, m: r.wmode || r.mode, t: title, pts: res.pts, d: res.d, at: Net.TS };
+  if (GAMES[r.game]) title = GAMES[r.game].title(r, patch);
+  patch['hist/r' + r.id] = { mid: r.mid || null, n: r.id, g: r.game, m: r.wmode || r.mode, t: title, pts: res.pts, d: res.d, at: Net.TS };
   return patch;
 }
 
@@ -829,6 +845,7 @@ function hostTick() {
     }
     return;
   }
+  if (GAMES[r.game]) return GAMES[r.game].hostTick(r, now, pres);
   if (r.status !== 'play') return;
   if (r.game === 'anagram') return anaHostTick(r, now);
   const parts = Object.keys(r.parts || {}).filter(id => pres.includes(id));
@@ -871,6 +888,7 @@ function anaHostTick(r, now) {
 
 /* ---------- timer ---------- */
 function timeLeft(r) {
+  if (r && GAMES[r.game]) return GAMES[r.game].timeLeft ? GAMES[r.game].timeLeft(r) : null;
   if (r && r.game === 'anagram') {
     if (typeof r.qStart !== 'number') return null;
     const k = 'i' + r.idx;
@@ -898,6 +916,7 @@ function onTick() {
     }
   }
   if (r && r.game === 'anagram' && r.status === 'play') renderAnaStatus(r);
+  if (r && GAMES[r.game] && GAMES[r.game].tick) GAMES[r.game].tick(r);
   // ogni secondo circa: regia e presenza
   const sec = Math.floor(Date.now() / 1000);
   if (sec !== R._lastSec) { R._lastSec = sec; computeHost(); hostTick(); }
@@ -944,6 +963,7 @@ function onRoomData() {
   else if (r && r.status === 'reveal') view = 'reveal';
   else if (r && r.game === 'wordle') view = r.status === 'choose' ? 'choose' : 'wordle';
   else if (r && r.game === 'anagram') view = 'anagram';
+  else if (r && GAMES[r.game]) view = r.game;
   $$('#room-main .view').forEach(v => v.classList.toggle('active', v.id === 'v-' + view));
   $('#s-room').classList.toggle('in-wordle', view === 'wordle');
   if (view !== 'wordle' && view !== 'anagram') activeKey = null;
@@ -952,6 +972,7 @@ function onRoomData() {
   if (view === 'wordle') renderWordle(r);
   if (view === 'choose') renderChoose(r);
   if (view === 'anagram') renderAnagram(r);
+  if (r && GAMES[view]) GAMES[view].render(r);
   if (view === 'reveal') renderReveal(r);
   if (view === 'final') renderFinal();
   if (!$('#modal').classList.contains('hidden') && R.modalScore) openScores();
@@ -959,6 +980,7 @@ function onRoomData() {
 }
 
 function modeLabel(r) {
+  if (GAMES[r.game]) return GAMES[r.game].label(r) + (r.N ? ` · ${r.k}/${r.N}` : '');
   if (r.game === 'anagram') return `Anagrammi · ${r.lang === 'en' ? '🇬🇧 ' : ''}${r.n} parole`;
   const m = { classic: 'Wordle', friend: 'Parola dell\'amico', sprint: 'Sprint' }[r.wmode] || 'Wordle';
   return `${m} · ${r.lang === 'en' ? '🇬🇧 ' : ''}${r.len} lettere${r.hard ? ' · hard' : ''}`;
@@ -989,8 +1011,8 @@ function renderLobby() {
   const cfg = Object.assign({}, DEFAULT_CFG, R.d.cfg || {});
   $$('#game-pick button').forEach(b => b.classList.toggle('on', b.dataset.g === cfg.game));
   $('#game-pick').style.pointerEvents = R.isHost ? '' : 'none';
-  $('#cfg-wordle').classList.toggle('on', cfg.game === 'wordle');
-  $('#cfg-anagram').classList.toggle('on', cfg.game === 'anagram');
+  $$('#cfg-card .cfg[data-g]').forEach(c => c.classList.toggle('on', c.dataset.g === cfg.game));
+  Object.values(GAMES).forEach(G => G.lobby && G.lobby(cfg));
   $$('#cfg-card .seg').forEach(seg => {
     const k = seg.dataset.k;
     let v = String(cfg[k]);
@@ -1005,9 +1027,10 @@ function renderLobby() {
   $('#cfg-hostnote').textContent = R.isHost ? '' : `(sceglie ${pname(host)})`;
   $('#start-btn').classList.toggle('hidden', !R.isHost);
   $('#wait-host').classList.toggle('hidden', R.isHost);
-  const needTwo = cfg.game === 'wordle' && cfg.wmode === 'friend' && presentIds().length < 2;
+  const minP = cfg.game === 'wordle' && cfg.wmode === 'friend' ? 2 : (GAMES[cfg.game] && GAMES[cfg.game].minPlayers) || 1;
+  const needTwo = presentIds().length < minP;
   $('#start-btn').disabled = needTwo;
-  $('#start-btn').textContent = needTwo ? 'Servono almeno 2 giocatori' : '▶️ Inizia';
+  $('#start-btn').textContent = needTwo ? `Servono almeno ${minP} giocatori` : '▶️ Inizia';
   $('#lobby-score').innerHTML = scoreTable();
 }
 
@@ -1300,7 +1323,9 @@ function renderReveal(r) {
   activeKey = null;
   const res = roundResults(r);
   const head = $('#reveal-head'), body = $('#reveal-body');
-  if (r.game === 'anagram') {
+  if (GAMES[r.game]) {
+    GAMES[r.game].reveal(r, res, head, body);
+  } else if (r.game === 'anagram') {
     head.innerHTML = `<h2>🔀 Anagrammi finiti!</h2>`;
     body.innerHTML = `<div class="ana-list">${Array.from({ length: r.n }, (_, i) => {
       const win = anaWinners(r, i);
@@ -1335,7 +1360,10 @@ function renderReveal(r) {
     }).join('')}</div>`;
     if (!R._celebrated || R._celebrated !== r.id) { R._celebrated = r.id; Sfx.play('reveal'); }
   }
-  $('#reveal-score').innerHTML = '<div class="card-title">Classifica</div>' + scoreTable();
+  $('#reveal-score').innerHTML = r.N
+    ? `<div class="card-title">${r.k >= r.N ? '🏁 Classifica della partita' : `Classifica della partita · round ${r.k}/${r.N}`}</div>${scoreTable(99, r.mid)}
+       <div class="muted small" style="margin-top:8px">Serata: ${(() => { const { t } = totals(); const top = Object.keys(t).sort((a, b) => t[b] - t[a])[0]; return top ? `in testa ${who(top)} con ${t[top]}` : ''; })()}</div>`
+    : '<div class="card-title">Classifica</div>' + scoreTable();
   renderHostActions(r);
 }
 
@@ -1343,6 +1371,13 @@ function renderHostActions(r) {
   const el = $('#host-actions');
   if (!R.isHost) {
     el.innerHTML = `<div class="muted center" style="width:100%">Aspettiamo che ${who(computeHost())} faccia partire il prossimo round…</div>`;
+    return;
+  }
+  if (r.N) {
+    const more = r.k < r.N;
+    el.innerHTML = `<button class="btn primary" data-a="next">${more ? `▶️ Avanti (${r.k + 1}/${r.N})` : '🔁 Nuova partita'}</button>
+      <button class="btn" data-a="lobby">⚙️ Impostazioni</button>
+      <button class="btn" data-a="final">🏁 Fine serata</button>`;
     return;
   }
   el.innerHTML = `<button class="btn primary" data-a="next">▶️ Prossimo round</button>
@@ -1364,6 +1399,7 @@ function awards() {
   best(tally((h, d) => h.g === 'wordle' && d.t && d.t <= 2 ? 1 : 0), 'Colpo di fortuna', '🍀', 'parole in ≤2 tentativi');
   best(tally((h, d) => h.g === 'wordle' && d.first ? 1 : 0), 'Il più veloce', '⚡', 'volte primo');
   best(tally((h, d) => h.g === 'wordle' && h.m !== 'sprint' && !d.chooser && d.t === 0 ? 1 : 0), 'Sfiga cosmica', '💀', 'parole mancate');
+  Object.values(GAMES).forEach(G => (G.awards || []).forEach(a => best(tally(a.fn), a.label, a.ico, a.unit)));
   best(tally((h, d) => h.g === 'anagram' && d.a ? d.a : 0), 'Re degli anagrammi', '🔀', 'anagrammi risolti');
   best(tally((h, d) => h.g === 'wordle' && d.sol ? d.sol : 0), 'Macchina da sprint', '🏎️', 'parole in sprint');
   return out.join('');
@@ -1413,6 +1449,7 @@ function bindRoomUi() {
     setCfg(b.parentElement.dataset.k, b.dataset.v);
   });
   $('#start-btn').onclick = startGame;
+  Object.values(GAMES).forEach(G => G.bind && G.bind());
   $('#game-pick').onclick = (e) => { const b = e.target.closest('button'); if (b) setCfg('game', b.dataset.g); };
   $('#ana-letters').onclick = (e) => { const b = e.target.closest('button[data-i]'); if (b) anaPick(+b.dataset.i); };
   $('#ana-back').onclick = () => anaKey('back');

@@ -124,7 +124,7 @@ h2 { margin: .3em 0 .5em; font-size: 1.3rem; }
 #room-main { flex: 1; display: flex; flex-direction: column; min-height: 0; }
 .view { display: none; flex: 1; min-height: 0; }
 .view.active { display: flex; }
-#v-lobby, #v-reveal, #v-final, #v-choose, #v-anagram { overflow-y: auto; padding: 16px 16px calc(80px + var(--safe-b)); flex-direction: column; }
+#v-lobby, #v-reveal, #v-final, #v-choose, #v-anagram, #v-ncc, #v-tre, #v-cah { overflow-y: auto; padding: 16px 16px calc(80px + var(--safe-b)); flex-direction: column; }
 
 .lobby-grid { width: 100%; max-width: 1100px; margin: 0 auto; display: grid; gap: 14px; grid-template-columns: 1fr; }
 .lobby-grid .card { margin: 0; }
@@ -141,7 +141,7 @@ h2 { margin: .3em 0 .5em; font-size: 1.3rem; }
 .tag.host { background: #4c1d95; color: #ddd6fe; }
 .tag.me { background: #134e4a; color: #99f6e4; }
 
-.game-pick { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px; }
+.game-pick { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; margin-bottom: 14px; }
 .game-pick button {
   background: var(--bg2); border: 2px solid var(--line); border-radius: 12px; padding: 12px 8px;
   display: flex; flex-direction: column; align-items: center; gap: 2px;
@@ -330,3 +330,57 @@ h2 { margin: .3em 0 .5em; font-size: 1.3rem; }
 .solo-ana { flex: 1; overflow-y: auto; padding: 16px; }
 .solo-end { text-align: center; }
 .solo-end .big-num { font-size: 3rem; font-weight: 800; }
+
+/* ---------- categorie (lobby) ---------- */
+.cat-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.cat-chips button, .cat-chips .chip { background: var(--bg2); border: 1px solid var(--line); border-radius: 99px; padding: 5px 11px; font-size: .85rem; color: var(--muted); font-weight: 600; }
+.cat-chips button.on { background: #26203a; border-color: var(--accent); color: var(--text); }
+.cat-chips.locked { pointer-events: none; }
+.cat-chips .chip { color: var(--text); border-color: var(--y); }
+.cat-chips .chip button { background: none; border: 0; padding: 0 0 0 4px; color: var(--muted); }
+
+/* ---------- nomi cose città ---------- */
+.ncc-wrap { width: 100%; max-width: 560px; margin: 0 auto; display: flex; flex-direction: column; gap: 12px; align-items: stretch; }
+.ncc-big { margin: 0 auto; width: 84px; height: 84px; border-radius: 18px; background: linear-gradient(135deg, var(--accent), var(--accent2)); display: grid; place-items: center; font-size: 3rem; font-weight: 900; color: #fff; }
+.ncc-big.small-letter { width: 60px; height: 60px; font-size: 2.1rem; }
+.ncc-banner { text-align: center; min-height: 22px; font-weight: 600; }
+.ncc-list { display: flex; flex-direction: column; gap: 8px; }
+.ncc-row { display: flex; flex-direction: column; gap: 4px; }
+.ncc-row span { font-size: .85rem; font-weight: 700; color: var(--muted); }
+.ncc-row input:disabled { opacity: .6; }
+.ncc-cat { margin-bottom: 10px; }
+.ncc-ans { display: flex; align-items: center; gap: 8px; padding: 5px 0; border-bottom: 1px solid var(--line); }
+.ncc-ans:last-child { border-bottom: 0; }
+.ncc-ans .txt { flex: 1; font-weight: 700; word-break: break-word; }
+.ncc-ans.bad .txt { text-decoration: line-through; opacity: .55; }
+.ncc-ans.unique .txt::after { content: ' ⭐'; }
+.ncc-ans .vote, .ncc-ans .vote-sp { width: 52px; flex: none; }
+.ncc-ans .vote { font-size: .8rem; padding: 3px 6px; border-radius: 7px; background: #2c2c33; border: 1px solid var(--line); }
+.ncc-ans .vote.on { background: #7f1d1d; border-color: var(--danger); }
+
+/* ---------- nominane 3 ---------- */
+.tre-who { font-size: 1.3rem; margin-bottom: 8px; }
+.tre-cat { font-size: 1.15rem; margin: 10px 0; line-height: 1.3; }
+.tre-cat b { font-size: 1.7rem; }
+.tre-count { font-size: 4.5rem; font-weight: 900; font-variant-numeric: tabular-nums; margin: 6px 0 14px; }
+.tre-count.low { color: var(--danger); animation: pulse .5s infinite; }
+.tre-go { font-size: 1.6rem; padding: 22px; margin-top: 10px; }
+.tre-vote { display: flex; gap: 10px; justify-content: center; }
+.tre-vote .btn { min-width: 120px; font-size: 1.1rem; padding: 14px; }
+
+/* ---------- carte scorrette ---------- */
+.cah-wrap { width: 100%; max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; gap: 12px; }
+.cah-card { border-radius: 14px; padding: 16px; font-weight: 700; line-height: 1.35; text-align: left; }
+.cah-card.black { background: #000; color: #fff; border: 1px solid #333; font-size: 1.2rem; }
+.cah-card.black.small { font-size: 1rem; }
+.cah-card.black.win { border: 2px solid #facc15; font-size: 1.3rem; }
+.cah-card .fill { color: #fde68a; text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: 3px; }
+.cah-card .by { margin-top: 8px; font-size: .85rem; color: #aaa; font-weight: 600; }
+.cah-card.white { background: #fff; color: #111; border: 2px solid transparent; font-size: .92rem; min-height: 96px; position: relative; display: block; width: 100%; }
+.cah-card.white.sel { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(139,92,246,.4); transform: translateY(-3px); }
+.cah-card.white .num { position: absolute; top: 6px; right: 8px; background: var(--accent); color: #fff; border-radius: 50%; width: 22px; height: 22px; display: grid; place-items: center; font-size: .8rem; }
+.cah-hand { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; margin: 8px 0 12px; }
+.cah-subs { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
+.cah-card.pickable { cursor: pointer; border-color: #555; }
+.cah-card.pickable:hover { border-color: #facc15; }
+.cah-custom { max-width: 520px; margin: 10px auto; }
